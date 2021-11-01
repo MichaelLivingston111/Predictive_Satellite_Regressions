@@ -39,7 +39,7 @@ for dim in ds.dimensions.values():
 for var in ds.variables.values():
     print(var)
 
-# Examine metadata for chlorophyll:
+# Examine metadata for just chlorophyll:
 print(ds['chlor_a'])
 
 # Define my variables:
@@ -54,7 +54,6 @@ ds.close()
 fig = plt.figure(figsize=(10, 4))
 ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 ax.coastlines()
-ax.set_global()
 ct = ax.contourf(Lon, Lat, np.log(Chl), transform=ccrs.PlateCarree(),
                  cmap="jet", vmax=3)
 ax.gridlines()
@@ -65,4 +64,14 @@ lon_formatter = LongitudeFormatter(zero_direction_label=True)
 lat_formatter = LatitudeFormatter()
 ax.xaxis.set_major_formatter(lon_formatter)
 ax.yaxis.set_major_formatter(lat_formatter)
+ax.set_ylim([45, 60])
+ax.set_xlim([-160, -120])
+
+
+# To do for this project:
+
+# Create the linear regression algorithm in python
+# Apply the model to the Northeast Pacific region
+# Obtain POC values for the same region, and compare with model estimates
+# Get the satellite values for the appropriate cruises and perform cross validations!
 
