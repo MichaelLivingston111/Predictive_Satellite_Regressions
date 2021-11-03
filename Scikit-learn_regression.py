@@ -8,6 +8,11 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 from sklearn.metrics import mean_squared_error
+import seaborn as sns
+import statsmodels
+from sklearn.linear_model import Ridge
+from yellowbrick.datasets import load_concrete
+from yellowbrick.regressor import ResidualsPlot
 
 #######################################################################################################################
 
@@ -25,6 +30,7 @@ x = raw_data.drop('TEP', axis=1)  # Predictor array
 
 # Handling categorical variables - if necessary: ue the pd.get_dummies() function:
 Seasons = pd.get_dummies(x, drop_first=True)
+Seasons = Seasons.drop('Log_Chl', axis=1)
 
 x = x.drop('Season', axis=1)  # dropping extra column
 x = pd.concat([x, Seasons], axis=1)  # concatenation of independent variables and new categorical variable.
@@ -52,7 +58,7 @@ y_train_prediction = LR.predict(x_train)
 
 #######################################################################################################################
 
-# EVALUATING THE MODEL
+# EVALUATING AND CROSS VALIDATING THE MODEL
 
 # Use r2_score from sklearn: Closely related ot MSE
 score = r2_score(y_test, y_prediction)
@@ -72,3 +78,22 @@ plt.xlim(lims)
 plt.ylim(lims)
 _ = plt.plot(lims, lims)  # Add a 1:1 line through the graph for comparison
 
+#######################################################################################################################
+
+# EXAMINING THE COEFFICIENTS:
+
+# Gives insight into how much influence, and in what direction, a predictor variable has on the target variable.
+coeff_data = pd.DataFrame(LR.coef_, x.columns, columns=['Coefficient'])
+
+#######################################################################################################################
+
+# EXAMINING THE MODEL RESIDUALS:
+
+# Calculate the residuals:
+Residuals = y_test - y_prediction
+
+# Plot the residuals vs the predicted values:
+sns.residplot(y_prediction, Residuals, lowess=False)
+
+# Plot residuals with distribution frequencies on each axis:
+sns.jointplot(x=y_prediction, y=Residuals, kind="reg")
