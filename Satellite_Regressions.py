@@ -2,7 +2,6 @@
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import netCDF4 as nc
 import cartopy.crs as ccrs  # NEED TO USE CONDA
 import cartopy.feature as cfeature
@@ -10,12 +9,16 @@ from cartopy.mpl.geoaxes import GeoAxes
 from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 import cartopy.mpl.geoaxes
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+from sklearn.linear_model import LinearRegression
 
+#######################################################################################################################
+
+# LOAD AND EXAMINE THE DATA SET FROM NASA:
 
 # Load the NetCDF dataset from NASA: Sept 6th - 14th 2021 Chlorophyll a data
 file = 'A20212492021256.L3m_8D_CHL_chlor_a_4km.nc'  # name the file
 ds = nc.Dataset(file)
-
 
 # NetCDF files have three parts: metadata, dimensions and variables. Variables contain both data and metadata.
 # netcdf4 allow sus to access all of this.
@@ -50,22 +53,82 @@ Lon = ds['lon'][:]  # Longitude
 # Close the file when not in use:
 ds.close()
 
+#######################################################################################################################
+
+# PLOT THE SATELLITE DATA FOR REFERENCE:
+
+# Colormap details:
+cmap = mpl.cm.cool  # Optional - can use "cool" instead of "jet"
+norm = mpl.colors.Normalize(vmin=-6, vmax=6)  # Normalize the colors
+
 # Plot the variables (chlorophyll a) a coordinates on a global scale:
 fig = plt.figure(figsize=(10, 4))
 ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 ax.coastlines()
-ct = ax.contourf(Lon, Lat, np.log(Chl), transform=ccrs.PlateCarree(),
-                 cmap="jet", vmax=3)
 ax.gridlines()
-cb = plt.colorbar(ct, orientation="vertical", extendrect='True')
+ct = ax.pcolormesh(Lon, Lat, np.log(Chl), transform=ccrs.PlateCarree(), cmap="jet")  # Continuous color bar
+plt.colorbar(ct, orientation="vertical")
 ax.set_xticks(np.arange(-180, 181, 60), crs=ccrs.PlateCarree())
 ax.set_yticks(np.arange(-90, 91, 30), crs=ccrs.PlateCarree())
 lon_formatter = LongitudeFormatter(zero_direction_label=True)
 lat_formatter = LatitudeFormatter()
 ax.xaxis.set_major_formatter(lon_formatter)
 ax.yaxis.set_major_formatter(lat_formatter)
+ax.add_feature(cfeature.COASTLINE)
+ax.add_feature(cfeature.LAND, zorder=80, edgecolor='k', facecolor='silver')
+ax.add_feature(cfeature.BORDERS)
 ax.set_ylim([45, 60])
 ax.set_xlim([-160, -120])
+
+#######################################################################################################################
+
+# CLEANING, INDEXING, AND SORTING THE SATELLITE DATA:
+
+# Transform the variables/coordinates into individual dataframes:
+Chl = pd.DataFrame(data=Chl)
+Lat = pd.DataFrame(data=Lat)
+Lon = pd.DataFrame(data=Lon)
+
+# Drop NaN values from the chl data set:
+Chl_x = Chl.fillna(0.0001)
+
+# Subset the area of interest (Northeast Pacific): 40:60N, 122:155W
+NE_Lat = pd.DataFrame(Lat[719:1199])
+NE_Lon = pd.DataFrame(Lon[599:1391])
+
+# Index out the chlorphyll data from the above selected coordinates:
+NE_Chl = Chl_x.iloc[719:1199, 599:1391]
+
+NE_Chl_log = np.log(NE_Chl)
+
+#######################################################################################################################
+
+# CREATING THE REGRESSION ALGORITHM
+
+# Import the raw dataset:
+raw_data = pd.read_csv("Total_data.csv")
+
+# Create the training data sets (using the entire data set, validation has been performed in a separate module):
+chlor_a = raw_data[['Log_Chl']]  # Predictor
+TEP = raw_data[['TEP']]  # Target
+
+# Create object of LinearRegression class:
+LR = LinearRegression()
+
+# Fit the training data:
+LR.fit(chlor_a, TEP)  # The model has now been trained on the training data!
+
+#######################################################################################################################
+
+# APPLYING THE REGRESSION: Not finished...
+
+df2 = pd.DataFrame()  # create an empty dataframe for predictions
+
+for column in NE_Chl:
+    for i in NE_Chl.iterrows():
+        NE_Chl.reshape(-1, 1)
+        LR.predict(i)
+
 
 
 # To do for this project:
