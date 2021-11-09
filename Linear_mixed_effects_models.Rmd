@@ -1,0 +1,137 @@
+---
+title: "Satellite_predictive_model"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Upload required libraries:
+```{r}
+
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+suppressMessages(library(ggpubr))
+suppressMessages(library(MuMIn))
+suppressMessages(library(lme4))
+
+```
+
+# Upload all the data, and sort into workable dataframes:
+```{r}
+
+# Upload the data from a total data file:
+total_data <- read.csv("Total_data.csv")
+total_data$Log_Chl <- log(total_data$Chl) # log transform the chlorophyll data
+
+# Extract the data that we want to work with - only data from the upper mixed layer:
+total_ML_split <- split(total_data, total_data$UpperMixed)  # Split the data set
+
+# Create a data frame with just upper mixed layer samples >30m:
+UpperMixed_data <- total_ML_split$Y  
+
+Spring_data <- split(UpperMixed_data, UpperMixed_data$Season)  # Split data set by season
+
+Spring_data <- Spring_data$Spring  # All spring data from the uuper mixed layer
+
+```
+
+# CREATE THE REGRESSION ALGORITHM: Linear mixed effects model
+```{r}
+
+model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)
+summary(model1)
+
+```
+
+# Checking model assumptions: Equal variance and normal distribution of model residuals:
+```{r}
+
+# Get the linear model residuals:
+UpperMixed_data$resid1 <- resid(model1)  
+
+# Residual plot:
+plot(model1)  # Residuals
+
+# Plot the distribution of the linear model residuals:
+H_model1 <- ggplot(data = UpperMixed_data, aes(resid1)) + 
+  geom_histogram(binwidth = 5, colour = "white", fill = "dodgerblue") 
+H_model1
+
+# Use the Shapiro-Wilks test to test for normality distributions in the lm residuals:
+shapiro.test(UpperMixed_data$resid1) 
+
+```
+
+# TRAINING AND TESTING SETS - SPLITTING THE DATA
+```{r}
+# Perform cross validations to test the model. Split the data set into a training set (70%) and a testing set (30%):
+
+# Set seed to replicate the same data partitions each time the code chunk is run:
+set.seed(124) 
+
+# Create the data split 70:30 training:testing:
+training.samples <- createDataPartition(UpperMixed_data$TEP, p = 0.75, list = FALSE)
+train.data1  <- UpperMixed_data[training.samples, ]  # Training set
+test.data1 <- UpperMixed_data[-training.samples, ]  # Testing set
+
+
+```
+
+# CROSS VALIDATION AND MODEL COMPARISON: linear models
+```{r}
+
+# Validation model:
+val_model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = train.data1)
+
+
+# Get predictions for the validation model training and testing sets:
+test.data1$predict1 <- predict(model1, test.data1, type = "response")
+train.data1$predict1 <- predict(model1, train.data1, type = "response")
+
+
+# Plot the results as 'True' values vs 'Predicted' values for the model:
+Val1 <- ggplot() + 
+        geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
+        geom_point(aes(x = test.data1$TEP, y = test.data1$predict1), 
+                   color = "red", fill = "red") +
+        geom_point(aes(x = train.data1$TEP, y = train.data1$predict1),
+                   color = "black", fill = "black", pch = 1) +
+        geom_smooth(aes(x = test.data1$TEP, y = test.data1$predict1),
+                    method = 'glm', color = "red") +
+        ylim(0, 175) +
+        xlim(0, 175) +
+        ylab("Predicted TEP Concentrations") +
+        xlab("") +
+        theme_minimal() 
+Val1
+
+```
+
+Determine the accuracy of the model:
+```{r}
+
+# Obtain the Root Mean Square Error and Mean Absolute Error for the linear 
+# models - this will give us an estimate of their accuracy.
+
+mean_total <- mean(UpperMixed_data$TEP)  # Calculate mean of true values
+
+mean_total <- mean(UpperMixed_data$TEP)  # Calculate mean of true values
+
+#Model1
+model1RMSE <- RMSE(test.data1$predict1, test.data1$TEP)
+model1MAE <- MAE(test.data1$predict1, test.data1$TEP)
+
+print(paste("The RMSE of model1 predictions is", model1RMSE))
+print(paste("The MAE of model1 predictions is", model1MAE))
+print(paste("The RMSE % of the mean for model1 is", 
+            (model1RMSE/mean_total) * 100))
+
+
+```
+
+
+
+
+
