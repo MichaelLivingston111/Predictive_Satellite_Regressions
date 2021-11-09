@@ -41,7 +41,17 @@ Spring_data <- Spring_data$Spring  # All spring data from the uuper mixed layer
 ```{r}
 
 model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)
-summary(model1)
+
+summary(model1)  # Get a model summary
+
+# The random effects section tells us how much variance we find among levels of our grouping factors, plus residual variance.
+# Here we find that the differences between seasons explains ~30% of the total variation, or the left over variation after the variance explained by the fixed effects.
+
+# Obtain R2 values:
+r.squaredGLMM(model1)
+
+# Marginal R_GLMM² represents the variance explained by the fixed effects
+# Conditional R_GLMM² is interpreted as a variance explained by the entire model, including both fixed and random effects
 
 ```
 
@@ -59,6 +69,10 @@ H_model1 <- ggplot(data = UpperMixed_data, aes(resid1)) +
   geom_histogram(binwidth = 5, colour = "white", fill = "dodgerblue") 
 H_model1
 
+# Plot a qqplot to visualize normality:
+qqnorm(resid(model1))
+qqline(resid(model1))
+
 # Use the Shapiro-Wilks test to test for normality distributions in the lm residuals:
 shapiro.test(UpperMixed_data$resid1) 
 
@@ -69,7 +83,7 @@ shapiro.test(UpperMixed_data$resid1)
 # Perform cross validations to test the model. Split the data set into a training set (70%) and a testing set (30%):
 
 # Set seed to replicate the same data partitions each time the code chunk is run:
-set.seed(124) 
+set.seed(1972) # 124, 1972
 
 # Create the data split 70:30 training:testing:
 training.samples <- createDataPartition(UpperMixed_data$TEP, p = 0.75, list = FALSE)
@@ -83,7 +97,7 @@ test.data1 <- UpperMixed_data[-training.samples, ]  # Testing set
 ```{r}
 
 # Validation model:
-val_model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = train.data1)
+val_model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season) + (1|Region), data = train.data1)
 
 
 # Get predictions for the validation model training and testing sets:
@@ -92,24 +106,22 @@ train.data1$predict1 <- predict(model1, train.data1, type = "response")
 
 
 # Plot the results as 'True' values vs 'Predicted' values for the model:
-Val1 <- ggplot() + 
-        geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
-        geom_point(aes(x = test.data1$TEP, y = test.data1$predict1), 
+ggplot() + 
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
+    geom_point(aes(x = test.data1$TEP, y = test.data1$predict1), 
                    color = "red", fill = "red") +
-        geom_point(aes(x = train.data1$TEP, y = train.data1$predict1),
+    geom_point(aes(x = train.data1$TEP, y = train.data1$predict1),
                    color = "black", fill = "black", pch = 1) +
-        geom_smooth(aes(x = test.data1$TEP, y = test.data1$predict1),
-                    method = 'glm', color = "red") +
-        ylim(0, 175) +
-        xlim(0, 175) +
-        ylab("Predicted TEP Concentrations") +
-        xlab("") +
-        theme_minimal() 
-Val1
+    ylim(0, 175) +
+    xlim(0, 175) +
+    ylab("Predicted TEP Concentrations") +
+    xlab("Measured TEP Concentrations") +
+    theme_pubr()
+
 
 ```
 
-Determine the accuracy of the model:
+# Determine the accuracy of the model:
 ```{r}
 
 # Obtain the Root Mean Square Error and Mean Absolute Error for the linear 
@@ -131,6 +143,27 @@ print(paste("The RMSE % of the mean for model1 is",
 
 ```
 
+# Visaulize the fixed effects for each predictor variable in each factor:
+```{r}
+
+# Temperature:
+Temp <- ggplot(UpperMixed_data, aes(x = Temperature, y = TEP, colour = Season)) +
+  facet_wrap(~Season, nrow = 1) + 
+  geom_point(alpha = 0.5) + 
+  geom_smooth(method = 'lm') + 
+  theme_classic()
+
+# Chlorophyll:
+Chl <- ggplot(UpperMixed_data, aes(x = Log_Chl, y = TEP, colour = Season)) +
+  facet_wrap(~Season, nrow = 1) + 
+  geom_point(alpha = 0.5) + 
+  geom_smooth(method = 'lm') + 
+  theme_classic()
+
+# Arrange the figures into one:
+ggarrange(Temp, Chl, nrow = 2, common.legend = TRUE)
+
+```
 
 
 
