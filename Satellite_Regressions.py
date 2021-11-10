@@ -14,7 +14,8 @@ from sklearn.linear_model import LinearRegression
 
 #######################################################################################################################
 
-# LOAD AND EXAMINE THE DATA SET FROM NASA:
+# LOAD AND EXAMINE THE DATA SET FROM NASA: (Note: some of this code is unnecessary for the actual model,
+# but is helpful in visualizing and examining the data set)
 
 # Load the NetCDF dataset from NASA: Sept 6th - 14th 2021 Chlorophyll a data
 file = 'A20212492021256.L3m_8D_CHL_chlor_a_4km.nc'  # name the file
@@ -96,10 +97,24 @@ Chl_x = Chl.fillna(0.0001)
 NE_Lat = pd.DataFrame(Lat[719:1199])
 NE_Lon = pd.DataFrame(Lon[599:1391])
 
-# Index out the chlorphyll data from the above selected coordinates:
+# Index out the chlorophyll data from the above selected coordinates:
 NE_Chl = Chl_x.iloc[719:1199, 599:1391]
 
+# Log all of the chlorophyll data:
 NE_Chl_log = np.log(NE_Chl)
+
+# Create an array from the matrix:
+NE_final = np.array(NE_Chl_log)
+
+# Create a dataframe with chlorophyll and the respective lats/lons:
+Chl_Sq = pd.DataFrame(data=NE_final, index=NE_Lat.squeeze(), columns=NE_Lon.squeeze())
+
+# Stack all the columns to create one series of logged chlorophyll values, with the respective lats/lons:
+Chl_predict = Chl_Sq.stack(dropna=False)
+
+# Now, I can apply the algorithm to predict values for each independent data point from the Satellite! But first,
+# I need to create the regression algorithm (below).
+
 
 #######################################################################################################################
 
@@ -118,17 +133,12 @@ LR = LinearRegression()
 # Fit the training data:
 LR.fit(chlor_a, TEP)  # The model has now been trained on the training data!
 
+# Vectorize the LR:
+LR_V = np.vectorize(LR)
+
 #######################################################################################################################
 
 # APPLYING THE REGRESSION: Not finished...
-
-df2 = pd.DataFrame()  # create an empty dataframe for predictions
-
-for column in NE_Chl:
-    for i in NE_Chl.iterrows():
-        NE_Chl.reshape(-1, 1)
-        LR.predict(i)
-
 
 
 # To do for this project:
@@ -138,3 +148,5 @@ for column in NE_Chl:
 # Obtain POC values for the same region, and compare with model estimates
 # Get the satellite values for the appropriate cruises and perform cross validations!
 
+# Get the independent regressions for each season between TEP:Chl and TEP:Temperature - this could be used as
+# justification in a model
