@@ -9,21 +9,32 @@ from cartopy.mpl.ticker import LongitudeFormatter, LatitudeFormatter
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from sklearn.linear_model import LinearRegression
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import scipy.stats as stats
+from statsmodels.stats.diagnostic import het_white
 
 #######################################################################################################################
 
 # LOAD AND EXAMINE THE DATA SET FROM NASA: (Note: some of this code is unnecessary for the actual model,
 # but is helpful in visualizing and examining the data set)
 
-# Load the NetCDF dataset from NASA: Sept 6th - 14th 2021 Chlorophyll a data
-file = 'A20212492021256.L3m_8D_CHL_chlor_a_4km.nc'  # name the file
+# Date range of interest: June 3 - 11, 2019 (8 day period)
+
+# Load the NetCDF dataset from NASA: Sept 6th - 14th 2021 Chlorophyll a data, 8 day, mapped
+file = 'A20191612019168.L3m_8D_CHL_chlor_a_4km.nc'  # name the file
 ds = nc.Dataset(file)
+
+# Load the Temperature NetCDF file: Sept 6th - 14th 2021 Temperature data, 8 day, mapped
+file_t = 'AQUA_MODIS.20190610_20190617.L3m.8D.SST.sst.4km.nc'
+ds_t = nc.Dataset(file_t)
 
 # NetCDF files have three parts: metadata, dimensions and variables. Variables contain both data and metadata.
 # netcdf4 allow sus to access all of this.
 
 # Print the dataset: get info about the variables in the file and their dimensions:
 print(ds)
+print(ds_t)
 
 # We can access information on a variety of things, bust most notably file format, data source, data version,
 # citation, dimensions and variables.
@@ -49,8 +60,13 @@ Chl = ds['chlor_a'][:]  # Chlorophyll
 Lat = ds['lat'][:]  # Latitude
 Lon = ds['lon'][:]  # Longitude
 
+Temp = ds_t['sst'][:]  # SST
+Lat_t = ds_t['lat'][:]  # Latitude
+Lon_t = ds_t['lon'][:]  # Longitude
+
 # Close the file when not in use:
 ds.close()
+ds_t.close()
 
 #######################################################################################################################
 
@@ -61,74 +77,98 @@ Chl_df = pd.DataFrame(data=Chl)
 Lat_df = pd.DataFrame(data=Lat)
 Lon_df = pd.DataFrame(data=Lon)
 
-# Drop NaN values from the chl data set, and fill it with data points that can be logged and predicted in a model:
+Temp_df = pd.DataFrame(data=Temp)
+Lat_df_t = pd.DataFrame(data=Lat_t)
+Lon_df_t = pd.DataFrame(data=Lon_t)
+
+
+# Drop NaN values from the chl and temp data sets, and fill it with data points that can be logged and/or predicted
+# in a model:
+Temp_x = Temp_df.fillna(0.0001)
 Chl_x = Chl_df.fillna(0.0001)
+
 
 # Subset the area of interest (Northeast Pacific): 40:60N, 122:155W
 NE_Lat = pd.DataFrame(Lat_df[719:1199])
 NE_Lon = pd.DataFrame(Lon_df[599:1391])
 
-# Index out the chlorophyll data from the area of interest:
+
+# Index out the chlorophyll and temp data from the area of interest:
 NE_Chl = Chl_x.iloc[719:1199, 599:1391]
+NE_Temp = Temp_x.iloc[719:1199, 599:1391]  # I believe the data is in Fahrenheit
+
 
 # Log all of the chlorophyll data:
 NE_Chl_log = np.log(NE_Chl)
 
-# Create an array from the logged chlorophyll matrix:
+
+# Create an array from the logged chlorophyll and temperature matrices:
 NE_final = np.array(NE_Chl_log)
+SST_final = np.array(NE_Temp)
+
 
 # Create a dataframe with chlorophyll and the respective lats/lons:
 Chl_Sq = pd.DataFrame(data=NE_final, index=NE_Lat.squeeze(), columns=NE_Lon.squeeze())
+SST_Sq = pd.DataFrame(data=SST_final, index=NE_Lat.squeeze(), columns=NE_Lon.squeeze())
 
-# Stack all the columns to create one series of logged chlorophyll values, with the respective lats/lons:
+
+# Stack all the columns to create one series of logged chlorophyll and SST values, with the respective lats/lons:
 Chl_predict = Chl_Sq.stack(dropna=False)  # This is our main predictor value.
+SST_predict = SST_Sq.stack(dropna=False)
 
+
+# Combine the two stacked predictor columns (SST and Chlor a):
+Predictors = pd.concat([Chl_predict, SST_predict], axis=1)
+
+
+# Add a categorical column for the appropriate season (used as a random effect in the model):
+Predictors['Season'] = 'Spring'
+
+
+# Rename the columns:
+Predictors.columns = ['Log_Chl', 'Temperature', 'Season']
 
 # Now, I can apply the algorithm to predict values for each independent data point from the Satellite! But first,
 # I need to create the regression algorithm (below).
 
 #######################################################################################################################
 
-# CREATING THE REGRESSION ALGORITHM
+# CREATING THE REGRESSION ALGORITHM: Linear mixed effects model
 
 # Import the raw dataset:
-raw_data = pd.read_csv("Total_data.csv")
+raw_data = pd.read_csv("Total_Sat_Data.csv")
 
-# Create the training data sets (using the entire data set, validation has been performed in a separate module):
-chlor_a = raw_data[['Log_Chl']]  # Predictor
-TEP = raw_data[['TEP']]  # Target
 
-# Create object of LinearRegression class:
-LR = LinearRegression()
-
-# Fit the training data:
-LR.fit(chlor_a, TEP)  # The model has now been trained on the training data!
+# CREATE A LINEAR MIXED EFFECTS MODEL USING THE ENTIRE DATA SET:
+model = smf.mixedlm("TEP ~ Log_Chl + Temperature", raw_data, groups=raw_data["Season"])
+mdf = model.fit()
+print(mdf.summary())
 
 #######################################################################################################################
 
 # APPLYING THE REGRESSION:
 
-print(Chl_predict.shape)  # View shape of the intended predictions
-print(chlor_a.shape)  # View shape of the predictor that the model was trained on
+# MAKE THE PREDICTIONS:
+y_prediction = mdf.predict(Predictors)
+print(y_prediction.shape)  # View shape of the intended predictions
+
 
 # Reshape the predictions into 2 dimensions in order for the model to operate on it:
-Chl_predict_x = pd.DataFrame(Chl_predict)  # Create a dataframe
-print(Chl_predict_x.shape)
-
-# MAKE THE PREDICTIONS:
-Predictions = LR.predict(Chl_predict_x)
+Predictions_map = pd.DataFrame(y_prediction)  # Create a dataframe of all the predictions
+print(Predictions_map.shape)  # View the dataframe shape
 
 #######################################################################################################################
 
-# PLOT THE SATELLITE CHLOROPHYLL DATA FOR REFERENCE: THE NORTHEAST PACIFIC
+# RESHAPE COORDINATE VARIABLES:
 
 # View the shape of each variable for reference: Need to change dimensions.
 print(NE_Chl_log.shape)  # 2D array: This is required as it is mapped to both arrays below
 print(NE_Lat.shape)  # 2D array: needs to be 1D
 print(NE_Lon.shape)  # 2D array: needs to be 1D
+print(NE_Temp.shape)  # 2D array: This is required as it is mapped to both arrays above
 
 
-# Reshape the variables in order to map them: Need to make 2D coordinate dfs in 1D array
+# Reshape the coordinate variables in order to map them: Need to make 2D coordinate dfs in 1D array
 Lat_map = np.array(NE_Lat)  # Change lat df to array
 Lat_map = Lat_map.flatten()  # Change 2D array to 1D array
 
@@ -137,14 +177,63 @@ Lon_map = Lon_map.flatten()  # Change 2D array to 1D array
 
 
 # Reprint the shapes to check: Valid.
-print(Chl_df.shape)  # Needs to remain a 2D array
+print(NE_Chl_log.shape)  # Needs to remain a 2D array
 print(Lat_map.shape)  # 1D array
 print(Lon_map.shape)  # 1D array
+
+#######################################################################################################################
+
+# MAP ALL THE PREDICTIONS:
+
+# View the shape of the coordinates, and predicted values:
+Predictions_map = np.array(Predictions_map)
+
+
+print(Lat_map.shape)  # 1D array
+print(Lon_map.shape)  # 1D array
+print(Predictions_map.shape)  # 2D array, but not the right dimensions
+
+
+# Reshape the predictions to match the lats/lons:
+Predictions_map = Predictions_map.reshape(480, 792)  # Corrected dimensions
+
+
+# Replace all original NaN values with NaNs:
+Predictions_map = np.where(Predictions_map < -387, np.nan, Predictions_map)  # -388.32414 = the given Nan value,
+# reinstate the Nans. These were originally removed in order for the regression algorithm to make predictions.
+
+
+# Replace all negative predictions with zeros:
+Predictions_map = np.where(Predictions_map < 0, 0, Predictions_map)
 
 
 # Colormap details: Optional
 cmap = mpl.cm.cool  # Optional - can use "cool" instead of "jet"
 norm = mpl.colors.Normalize(vmin=-6, vmax=6)  # Normalize the colors
+
+
+# Plot all the predictions:
+fig = plt.figure(figsize=(10, 4))
+ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+ax.coastlines()
+ax.gridlines()
+ct = ax.pcolormesh(Lon_map, Lat_map, Predictions_map, transform=ccrs.PlateCarree(), cmap="jet")  # Continuous color bar
+plt.colorbar(ct, orientation="vertical")
+ax.set_xticks(np.arange(-155, -122, 5), crs=ccrs.PlateCarree())
+ax.set_yticks(np.arange(40, 60, 5), crs=ccrs.PlateCarree())
+lon_formatter = LongitudeFormatter(zero_direction_label=True)
+lat_formatter = LatitudeFormatter()
+ax.xaxis.set_major_formatter(lon_formatter)
+ax.yaxis.set_major_formatter(lat_formatter)
+ax.add_feature(cfeature.COASTLINE)
+ax.add_feature(cfeature.LAND, zorder=80, edgecolor='k', facecolor='silver')
+ax.add_feature(cfeature.BORDERS)
+ax.set_ylim([40, 60])
+ax.set_xlim([-155, -122])
+
+#######################################################################################################################
+
+# PLOT THE PREDICTOR VARIABLES FOR REFERENCE:
 
 # Plot the variables (chlorophyll a) on for the new variables (Northeast Pacific):
 fig = plt.figure(figsize=(10, 4))
@@ -163,39 +252,13 @@ ax.add_feature(cfeature.COASTLINE)
 ax.add_feature(cfeature.LAND, zorder=80, edgecolor='k', facecolor='silver')
 ax.add_feature(cfeature.BORDERS)
 
-
-#######################################################################################################################
-
-# MAP ALL THE PREDICTIONS:
-
-# View the shape of the coordinates, and predicted values
-
-print(Lat_map.shape)  # 1D array
-print(Lon_map.shape)  # 1D array
-print(Predictions.shape)  # 2D array, but not the right dimensions
-
-
-# Reshape the predictions to match the lats/lons:
-Predictions_map = Predictions.reshape(480, 792)  # Corrected dimensions
-
-
-# Replace all original NaN values with NaNs:
-Predictions_map = np.where(Predictions_map < -387, np.nan, Predictions_map)  # -388.32414 = the given Nan value,
-# reinstate the Nans. These were originally removed in order for the regression algorithm to make predictions.
-
-# Replace all negative predictions with zeros:
-Predictions_map = np.where(Predictions_map < 0, 0, Predictions_map)
-
-
-# Plot the variables (chlorophyll a) on for the new variables (Northeast Pacific):
+# Plot the variables (SST) on for the new variables (Northeast Pacific):
 fig = plt.figure(figsize=(10, 4))
 ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
 ax.coastlines()
 ax.gridlines()
-ct = ax.pcolormesh(Lon_map, Lat_map, Predictions_map, transform=ccrs.PlateCarree(), cmap="jet")  # Continuous color bar
+ct = ax.pcolormesh(Lon_map, Lat_map, NE_Temp, transform=ccrs.PlateCarree(), cmap="jet")  # Continuous color bar
 plt.colorbar(ct, orientation="vertical")
-ax.set_xticks(np.arange(-155, -122, 5), crs=ccrs.PlateCarree())
-ax.set_yticks(np.arange(40, 60, 5), crs=ccrs.PlateCarree())
 lon_formatter = LongitudeFormatter(zero_direction_label=True)
 lat_formatter = LatitudeFormatter()
 ax.xaxis.set_major_formatter(lon_formatter)
@@ -203,8 +266,7 @@ ax.yaxis.set_major_formatter(lat_formatter)
 ax.add_feature(cfeature.COASTLINE)
 ax.add_feature(cfeature.LAND, zorder=80, edgecolor='k', facecolor='silver')
 ax.add_feature(cfeature.BORDERS)
-ax.set_ylim([40, 60])
-ax.set_xlim([-155, -122])
+
 
 #######################################################################################################################
 
