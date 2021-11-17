@@ -18,6 +18,10 @@ suppressMessages(library(lme4))
 
 ```
 
+# Linear mixed models are an extension of simple linear models to allow both fixed and random effects, and are particularly used when there is non independence in the data, such as arises from a hierarchical structure. For example, students could be sampled from within classrooms, or patients from within doctors, or (as in th is case), samples can be taken within distinct seasons.
+
+
+
 # Upload all the data, and sort into workable dataframes:
 ```{r}
 
@@ -33,7 +37,7 @@ UpperMixed_data <- total_ML_split$Y
 
 Spring_data <- split(UpperMixed_data, UpperMixed_data$Season)  # Split data set by season
 
-Spring_data <- Spring_data$Spring  # All spring data from the uuper mixed layer
+Spring_data <- Spring_data$Spring  # All spring data from the upper mixed layer
 
 ```
 
@@ -41,6 +45,8 @@ Spring_data <- Spring_data$Spring  # All spring data from the uuper mixed layer
 ```{r}
 
 model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)
+# model1 <- lmer(TEP ~ Log_Chl + SST + (1|Season), data = UpperMixed_data)
+# model1 <- lm(TEP ~ Log_Chl + (Temperature * Season), data = UpperMixed_data)
 
 summary(model1)  # Get a model summary
 
@@ -118,7 +124,6 @@ ggplot() +
     xlab("Measured TEP Concentrations") +
     theme_pubr()
 
-
 ```
 
 # Determine the accuracy of the model:
@@ -143,25 +148,127 @@ print(paste("The RMSE % of the mean for model1 is",
 
 ```
 
+Now, perform 5X model cross validation:
+```{r}
+
+# Create the data split 70:30 training:testing:
+set.seed(55)
+training.samples2 <- createDataPartition(UpperMixed_data$TEP, p = 0.75, list = FALSE)
+train.data2  <- UpperMixed_data[training.samples2, ]  # Training set
+test.data2 <- UpperMixed_data[-training.samples2, ]  # Testing set
+
+set.seed(11)
+training.samples3 <- createDataPartition(UpperMixed_data$TEP, p = 0.75, list = FALSE)
+train.data3  <- UpperMixed_data[training.samples3, ]  # Training set
+test.data3 <- UpperMixed_data[-training.samples3, ]  # Testing set
+
+set.seed(22)
+training.samples4 <- createDataPartition(UpperMixed_data$TEP, p = 0.75, list = FALSE)
+train.data4  <- UpperMixed_data[training.samples4, ]  # Training set
+test.data4 <- UpperMixed_data[-training.samples4, ]  # Testing set
+
+set.seed(747)
+training.samples5 <- createDataPartition(UpperMixed_data$TEP, p = 0.75, list = FALSE)
+train.data5  <- UpperMixed_data[training.samples5, ]  # Training set
+test.data5 <- UpperMixed_data[-training.samples5, ]  # Testing set
+
+# Validation models:
+val_model2 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season) + (1|Region), data = train.data2)
+val_model3 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season) + (1|Region), data = train.data3)
+val_model4 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season) + (1|Region), data = train.data4)
+val_model5 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season) + (1|Region), data = train.data5)
+
+
+# Get predictions for the validation model training and testing sets:
+test.data2$predict2 <- predict(model2, test.data2, type = "response")
+test.data3$predict3 <- predict(model2, test.data3, type = "response")
+test.data4$predict4 <- predict(model2, test.data4, type = "response")
+test.data5$predict5 <- predict(model2, test.data5, type = "response")
+
+
+# Plot the results of the 5X cross validation:
+ggplot() + 
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
+    geom_point(aes(x = test.data1$TEP, y = test.data1$predict1), 
+                   ) +
+    geom_point(aes(x = test.data2$TEP, y = test.data2$predict2), 
+                   ) +
+    geom_point(aes(x = test.data3$TEP, y = test.data3$predict3), 
+                   ) +
+    geom_point(aes(x = test.data4$TEP, y = test.data4$predict4), 
+                   ) +
+    geom_point(aes(x = test.data5$TEP, y = test.data5$predict5), 
+                   ) +
+    ylim(0, 175) +
+    xlim(0, 175) +
+    ylab("Predicted TEP Concentrations") +
+    xlab("Measured TEP Concentrations") +
+    theme_pubr()
+
+
+# Accuracy calculation:
+model1RMSE <- RMSE(test.data1$predict1, test.data1$TEP)
+model1MAE <- MAE(test.data1$predict1, test.data1$TEP)
+
+model2RMSE <- RMSE(test.data2$predict2, test.data2$TEP)
+model2MAE <- MAE(test.data2$predict2, test.data2$TEP)
+
+model3RMSE <- RMSE(test.data3$predict3, test.data3$TEP)
+model3MAE <- MAE(test.data3$predict3, test.data3$TEP)
+
+model4RMSE <- RMSE(test.data4$predict4, test.data4$TEP)
+model4MAE <- MAE(test.data4$predict4, test.data4$TEP)
+
+model5RMSE <- RMSE(test.data5$predict5, test.data5$TEP)
+model5MAE <- MAE(test.data5$predict5, test.data5$TEP)
+
+
+RMSE_Avg <- mean(model1RMSE, model2RMSE, model3RMSE, model4RMSE, model5RMSE)
+print(RMSE_Avg)
+
+```
+
+
 # Visaulize the fixed effects for each predictor variable in each factor:
 ```{r}
 
 # Temperature:
 Temp <- ggplot(UpperMixed_data, aes(x = Temperature, y = TEP, colour = Season)) +
-  facet_wrap(~Season, nrow = 1) + 
+  facet_wrap(~Season, nrow = 3) + 
   geom_point(alpha = 0.5) + 
-  geom_smooth(method = 'lm') + 
-  theme_classic()
+  geom_smooth(method = 'lm') +
+  theme_classic() +
+  theme(
+  strip.background = element_blank(),
+  strip.text.x = element_blank())
 
 # Chlorophyll:
 Chl <- ggplot(UpperMixed_data, aes(x = Log_Chl, y = TEP, colour = Season)) +
-  facet_wrap(~Season, nrow = 1) + 
+  facet_wrap(~Season, nrow = 3) + 
   geom_point(alpha = 0.5) + 
   geom_smooth(method = 'lm') + 
-  theme_classic()
+  ylab("") +
+  theme_classic() +
+  theme(
+  strip.background = element_blank(),
+  strip.text.x = element_blank())
+
+# SST:
+SST <- ggplot(UpperMixed_data, aes(x = SST, y = TEP, colour = Season)) +
+  facet_wrap(~Season, nrow = 3) + 
+  geom_point(alpha = 0.5) + 
+  geom_smooth(method = 'lm') + 
+  theme_classic() +
+  theme(
+  strip.background = element_blank(),
+  strip.text.x = element_blank())
+
+SST
+Temp
+
 
 # Arrange the figures into one:
-ggarrange(Temp, Chl, nrow = 2, common.legend = TRUE)
+ggarrange(Temp, Chl, nrow = 1, common.legend = TRUE)
 
 ```
 
