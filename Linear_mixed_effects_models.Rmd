@@ -15,6 +15,9 @@ suppressMessages(library(caret))
 suppressMessages(library(ggpubr))
 suppressMessages(library(MuMIn))
 suppressMessages(library(lme4))
+suppressMessages(library(feather))
+suppressMessages(library(arrow))
+
 
 ```
 
@@ -103,7 +106,7 @@ test.data1 <- UpperMixed_data[-training.samples, ]  # Testing set
 ```{r}
 
 # Validation model:
-val_model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season) + (1|Region), data = train.data1)
+val_model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = train.data1)
 
 
 # Get predictions for the validation model training and testing sets:
@@ -116,8 +119,6 @@ ggplot() +
     geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
     geom_point(aes(x = test.data1$TEP, y = test.data1$predict1), 
                    color = "red", fill = "red") +
-    geom_point(aes(x = train.data1$TEP, y = train.data1$predict1),
-                   color = "black", fill = "black", pch = 1) +
     ylim(0, 175) +
     xlim(0, 175) +
     ylab("Predicted TEP Concentrations") +
@@ -173,17 +174,17 @@ train.data5  <- UpperMixed_data[training.samples5, ]  # Training set
 test.data5 <- UpperMixed_data[-training.samples5, ]  # Testing set
 
 # Validation models:
-val_model2 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season) + (1|Region), data = train.data2)
-val_model3 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season) + (1|Region), data = train.data3)
-val_model4 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season) + (1|Region), data = train.data4)
-val_model5 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season) + (1|Region), data = train.data5)
+val_model2 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = train.data2)
+val_model3 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = train.data3)
+val_model4 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = train.data4)
+val_model5 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = train.data5)
 
 
 # Get predictions for the validation model training and testing sets:
-test.data2$predict2 <- predict(model2, test.data2, type = "response")
-test.data3$predict3 <- predict(model2, test.data3, type = "response")
-test.data4$predict4 <- predict(model2, test.data4, type = "response")
-test.data5$predict5 <- predict(model2, test.data5, type = "response")
+test.data2$predict2 <- predict(val_model2, test.data2, type = "response")
+test.data3$predict3 <- predict(val_model3, test.data3, type = "response")
+test.data4$predict4 <- predict(val_model4, test.data4, type = "response")
+test.data5$predict5 <- predict(val_model5, test.data5, type = "response")
 
 
 # Plot the results of the 5X cross validation:
@@ -240,7 +241,8 @@ Temp <- ggplot(UpperMixed_data, aes(x = Temperature, y = TEP, colour = Season)) 
   theme_classic() +
   theme(
   strip.background = element_blank(),
-  strip.text.x = element_blank())
+  strip.text.x = element_blank(),
+  legend.background = element_blank())
 
 # Chlorophyll:
 Chl <- ggplot(UpperMixed_data, aes(x = Log_Chl, y = TEP, colour = Season)) +
@@ -248,10 +250,12 @@ Chl <- ggplot(UpperMixed_data, aes(x = Log_Chl, y = TEP, colour = Season)) +
   geom_point(alpha = 0.5) + 
   geom_smooth(method = 'lm') + 
   ylab("") +
+  xlab("Log Chlorophyll a") +
   theme_classic() +
   theme(
   strip.background = element_blank(),
-  strip.text.x = element_blank())
+  strip.text.x = element_blank(),
+  legend.background = element_blank())
 
 # SST:
 SST <- ggplot(UpperMixed_data, aes(x = SST, y = TEP, colour = Season)) +
@@ -261,6 +265,7 @@ SST <- ggplot(UpperMixed_data, aes(x = SST, y = TEP, colour = Season)) +
   theme_classic() +
   theme(
   strip.background = element_blank(),
+  legend.background = element_blank(),
   strip.text.x = element_blank())
 
 SST
@@ -269,6 +274,24 @@ Temp
 
 # Arrange the figures into one:
 ggarrange(Temp, Chl, nrow = 1, common.legend = TRUE)
+
+```
+
+# Input python dataframe composed of predictor variables from NASA Satellites:
+```{r}
+
+# Use the arrow and feather packages:
+df <- arrow::read_feather('May_2021_LineP.feather')
+
+```
+
+# Make predictions on the python Satellite dataframe:
+```{r}
+Predictions <- predict(model1, df, type = "response")
+Predictions <- as.data.frame(Predictions)  # Create a data frame of predictions
+
+# Save the predictions back into a feather file, to be imported back into python:
+feather::write_feather(Predictions, 'May_2021_LineP_Predictions.feather')
 
 ```
 
