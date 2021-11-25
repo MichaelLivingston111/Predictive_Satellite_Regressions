@@ -31,8 +31,7 @@ suppressMessages(library(dplyr))
 
 # Upload the data from a total data file:
 total_data <- read.csv("Total_Sat_Data.csv")
-# total_data <- read.csv("Total_Sat_Data2.csv")
-# total_data <- read.csv("Total_Sat_Data_Spring.csv")
+plot_data <- read.csv("Total_Sat_Data2.csv")
 
 # total_data$Log_Chl <- log(total_data$Chl) # log transform the chlorophyll data, if required
 
@@ -42,19 +41,13 @@ total_data <- read.csv("Total_Sat_Data.csv")
 # The file above already has these requirements:
 UpperMixed_data <- total_data
 
-Spring_data <- split(UpperMixed_data, UpperMixed_data$Season)  # Split data set by season
-
-Spring_data <- Spring_data$Spring  # All spring data from the upper mixed layer
-
 ```
+
 
 # CREATE THE REGRESSION ALGORITHM: Linear mixed effects model
 ```{r}
 
 model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)
-# model1 <- lm(TEP ~ Log_Chl + Temperature, data = UpperMixed_data)
-# model1 <- lmer(TEP ~ Log_Chl + SST + (1|Season), data = UpperMixed_data)
-# model1 <- lm(TEP ~ Log_Chl + (Temperature * Season), data = UpperMixed_data)
 
 summary(model1)  # Get a model summary
 
@@ -263,42 +256,32 @@ print(RMSE_Avg)
 ```{r}
 
 # Temperature:
-Temp <- ggplot(UpperMixed_data, aes(x = Temperature, y = TEP, colour = Season)) +
+Temp <- ggplot(plot_data, aes(x = Temperature, y = TEP, shape = Season)) +
   facet_wrap(~Season, nrow = 3) + 
-  geom_point(alpha = 0.5) + 
+  geom_point(alpha = 0.7) + 
   geom_smooth(method = 'lm') +
+  ylab("TEP (\U003BCg XG eq/L)") +
+  xlab("Temperature (\u00B0C)") +
   theme_classic() +
   theme(
   strip.background = element_blank(),
   strip.text.x = element_blank(),
-  legend.background = element_blank())
+  legend.background = element_blank(),
+  legend.title = element_blank())
 
 # Chlorophyll:
-Chl <- ggplot(UpperMixed_data, aes(x = Log_Chl, y = TEP, colour = Season)) +
+Chl <- ggplot(plot_data, aes(x = Log_Chl, y = TEP, shape = Season)) +
   facet_wrap(~Season, nrow = 3) + 
-  geom_point(alpha = 0.5) + 
+  geom_point(alpha = 0.7) + 
   geom_smooth(method = 'lm') + 
   ylab("") +
-  xlab("Log Chlorophyll a") +
+  xlab("Log Chlorophyll a (\U003BCg/L)") +
   theme_classic() +
   theme(
   strip.background = element_blank(),
   strip.text.x = element_blank(),
-  legend.background = element_blank())
-
-# SST:
-SST <- ggplot(UpperMixed_data, aes(x = SST, y = TEP, colour = Season)) +
-  facet_wrap(~Season, nrow = 3) + 
-  geom_point(alpha = 0.5) + 
-  geom_smooth(method = 'lm') + 
-  theme_classic() +
-  theme(
-  strip.background = element_blank(),
   legend.background = element_blank(),
-  strip.text.x = element_blank())
-
-SST
-Temp
+  legend.title = element_blank())
 
 
 # Arrange the figures into one:
