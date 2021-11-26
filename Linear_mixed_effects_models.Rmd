@@ -47,9 +47,14 @@ UpperMixed_data <- total_data
 # CREATE THE REGRESSION ALGORITHM: Linear mixed effects model
 ```{r}
 
+# Create the linear mixed effects model:
 model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)
 
+# Create a linear model for comparison:
+model2 <- lm(TEP ~ Log_Chl + Season , data = UpperMixed_data)
+
 summary(model1)  # Get a model summary
+summary(model2)  # Get a model summary
 
 # The random effects section tells us how much variance we find among levels of our grouping factors, plus residual variance.
 # Here we find that the differences between seasons explains ~30% of the total variation, or the left over variation after the variance explained by the fixed effects.
@@ -61,6 +66,28 @@ r.squaredGLMM(model1)
 # Conditional R_GLMM² is interpreted as a variance explained by the entire model, including both fixed and random effects
 
 ```
+
+
+# Compare the linear mixed effects model and the linear model:
+```{r}
+
+# Mixed effects model
+mean(resid(model1)) # mean
+sigma(model1) # Residual standard error
+
+# Linear model
+mean(resid(model2)) # mean
+sigma(model2)  # Residual standard error
+
+# Model 1 has less deviation in the residuals, while both residuals means are close to zero.
+
+# Compare AIC and BIC values:
+anova(model1, model2)
+
+# The results from this test suggest that the mixed effects model (model1) is a better fit.
+
+```
+
 
 # Checking model assumptions: Equal variance and normal distribution of model residuals:
 ```{r}
@@ -95,12 +122,34 @@ shapiro.test(UpperMixed_data$resid1)
 
 ```
 
+# Utilize bootsrapping to test the model coefficients and accuracy:
+```{r}
+# Bootstrap is a method of random sampling with replacement. Linear regression relies on several assumptions, and the coefficients of the formulas are presumably normally distributed. It shows that on average if we repeated the experiment thousands and thousands of times, the line would be in confidence intervals.
+
+# Predict values:
+pred <- predict(model1, re.form = NA)
+
+# Bootstrap Confidence Intervals:
+boot <- bootMer(model1, predict, nsim = 100, re.form = NA)
+    std.err <- apply(boot$t, 2, sd)
+    CI.lo <- pred - std.err*1.96
+    CI.hi <- pred + std.err*1.96
+
+# Plot:
+ggplot(UpperMixed_data, aes(x = Log_Chl, y = TEP)) +
+    geom_line(aes(y = pred), size=2) +
+    geom_line(aes(x = Log_Chl, y = TEP), alpha = 0.2) +
+    geom_ribbon(aes(ymin = CI.lo, ymax = CI.hi), size=2, alpha = 0.03, linetype = 1)
+
+```
+
+
 # TRAINING AND TESTING SETS - SPLITTING THE DATA
 ```{r}
 # Perform cross validations to test the model. Split the data set into a training set (70%) and a testing set (30%):
 
 # Set seed to replicate the same data partitions each time the code chunk is run:
-set.seed(1972) # 124, 1972
+set.seed(1972) # 124, 1972, 2022
 
 # Create the data split 70:30 training:testing:
 training.samples <- createDataPartition(UpperMixed_data$TEP, p = 0.75, list = FALSE)
