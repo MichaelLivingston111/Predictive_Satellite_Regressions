@@ -1,0 +1,165 @@
+---
+title: "Mixed_effects_model_validation_and_bootsrapping"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Upload required libraries:
+```{r}
+
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+suppressMessages(library(ggpubr))
+suppressMessages(library(MuMIn))
+suppressMessages(library(lme4))
+suppressMessages(library(feather))
+suppressMessages(library(arrow))
+suppressMessages(library(dplyr))
+
+```
+
+
+# Upload all the data, and sort into workable dataframes:
+```{r}
+
+# Upload the data from a total data file:
+total_data <- read.csv("Total_Sat_Data.csv")
+plot_data <- read.csv("Total_Sat_Data2.csv")
+
+UpperMixed_data <- total_data
+
+```
+
+# CREATE THE REGRESSION ALGORITHM: Linear mixed effects model
+```{r}
+
+# Create the linear mixed effects model:
+model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)
+
+summary(model1)  # Get a model summary
+
+# The random effects section tells us how much variance we find among levels of our grouping factors, plus residual variance.
+# Here we find that the differences between seasons explains ~30% of the total variation, or the left over variation after the variance explained by the fixed effects.
+
+# Obtain R2 values:
+r.squaredGLMM(model1)
+
+# Marginal R_GLMM² represents the variance explained by the fixed effects
+# Conditional R_GLMM² is interpreted as a variance explained by the entire model, including both fixed and random effects
+
+```
+
+
+# Checking model assumptions: Equal variance and normal distribution of model residuals:
+```{r}
+
+# Get the linear model residuals:
+UpperMixed_data$resid1 <- resid(model1)  
+UpperMixed_data$predict1 <- predict(model1) 
+
+# Residual plot:
+plot(model1 )  # Residuals
+Res_model1 <- ggplot(data = UpperMixed_data, aes(predict1, resid1)) + 
+  geom_point() + 
+  xlab("Fitted Values") +
+  ylab("Model Residuals") +
+  theme_pubr()
+Res_model1
+
+# Plot the distribution of the linear model residuals:
+H_model1 <- ggplot(data = UpperMixed_data, aes(resid1)) + 
+  geom_histogram(binwidth = 1, colour = "black", fill = "white") +
+  xlab("Residuals") +
+  ylab("Count") +
+  theme_pubr()
+H_model1
+
+# Plot a qqplot to visualize normality:
+qqnorm(resid(model1))
+qqline(resid(model1))
+
+# Use the Shapiro-Wilks test to test for normality distributions in the lm residuals:
+shapiro.test(UpperMixed_data$resid1) 
+
+```
+
+
+# Bootstrapping model cross validation. Here, I will create 1000 random mixed effects models from random combinations of data in the dataset, make predictions and view the results.
+
+```{r}
+
+# Containers for the coefficients, predictions and accuracy measurements:
+sample_coef_intercept <- NULL
+sample_coef_x1 <- NULL
+sample_predict <- NULL
+sample_train <- NULL
+RMSE <- NULL
+MAE <- NULL
+
+# Loop through model prediciton and cross validation 500x. The model is trained on 95% of the data, and validated on the other 5%, 500x.
+
+for (i in 1:500) {
+  
+  #Creating a re-sampled data set from the total data:
+  training.samples <- createDataPartition(UpperMixed_data$TEP, p = 0.95, list = FALSE)
+  train.data1  <- UpperMixed_data[training.samples, ]  # Training set
+  test.data1 <- UpperMixed_data[-training.samples, ]  # Testing set
+  
+  # Running the model on the partitioned training data:
+  model_bootstrap <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = train.data1)
+  
+  # Model predictions:
+  sample_predict <- 
+    c(sample_predict, predict(model_bootstrap, test.data1, type = "response", 
+                              allow.new.levels = TRUE))
+  
+  # Model 'training'true' validation points:
+  sample_train <- c(sample_train, test.data1$TEP)
+  
+  # RMSE:
+  RMSE <- c(RMSE, RMSE(sample_predict, sample_train))
+  
+  # MAE:
+  MAE <- c(MAE, MAE(sample_predict, sample_train))
+}
+
+# The above loop generated 1000 different regression models with model coefficients, y intercepts and predictions, specified below: 
+predictions <- cbind(sample_predict, sample_train)
+predictions <- as.data.frame(predictions)  # as a data frame
+RMSE <- as.data.frame(RMSE)
+MAE <- as.data.frame(MAE)
+
+# Plot the bootstrapping cross validation:
+ggplot(predictions, aes(x = sample_train, y = sample_predict)) +
+  geom_point(alpha = 0.1, pch = 21, fill = 'blue', color = 'white') +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
+  ylab("Predicted TEP concentration") +
+  xlab("Measured TEP concentration") +
+  xlim(0, 175) +
+  ylim(0, 175) +
+  theme_pubr()
+
+# Obtain the Root Mean Square Error and Mean Absolute Error for the linear models - this will give us an estimate of their accuracy.
+
+mean_total <- mean(UpperMixed_data$TEP)  # Calculate mean of true values
+
+Avg_RMSE = lapply(RMSE, mean)
+Avg_RMSE = as.numeric(Avg_RMSE)
+
+Avg_MAE = lapply(MAE, mean)
+Avg_MAE = as.numeric(Avg_MAE)
+
+print(paste("The RMSE of model1 predictions is", Avg_RMSE))
+print(paste("The RMSE % of the mean for model1 is", 
+            (Avg_RMSE/mean_total) * 100))
+
+print(paste("The MAE of model1 predictions is", Avg_MAE))
+print(paste("The MAE % of the mean for model1 is", 
+            (Avg_MAE/mean_total) * 100))
+
+
+```
