@@ -1,0 +1,105 @@
+---
+title: "Model_Selection"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# This file contains code and analysis for seletcing the most appropirate model based on the data set obtained in my doctorate. Here, I compare a variety of sutiable models for estimating the concetration of marine exopolymers from remote sensors on the satellite Modis Aqua.
+
+# Upload required libraries:
+```{r}
+
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+suppressMessages(library(ggpubr))
+suppressMessages(library(MuMIn))
+suppressMessages(library(lme4))
+suppressMessages(library(lmerTest))
+suppressMessages(library(dplyr))
+
+```
+
+
+# Upload all the data, and sort into workable dataframes:
+```{r}
+
+# Upload the data from a total data file:
+total_data <- read.csv("Total_Sat_Data.csv")
+plot_data <- read.csv("Total_Sat_Data2.csv")
+
+# The file above already has these requirements:
+UpperMixed_data <- total_data
+
+```
+
+# Create all the models:
+```{r}
+
+model1 <- lm(TEP ~ Log_Chl, data = UpperMixed_data)
+summary(model1)
+
+model2 <- lm(TEP ~ Log_Chl + Season , data = UpperMixed_data)
+summary(model2)
+
+model3 <- lmer(TEP ~ Log_Chl + (1|Season) , data = UpperMixed_data)
+summary(model3)
+
+model4 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season) , data = UpperMixed_data)
+summary(model4)
+
+
+# Obtain R2 values:
+M1_R2 <- r.squaredGLMM(model1)
+M2_R2 <- r.squaredGLMM(model2)
+M3_R2 <- r.squaredGLMM(model3)
+M4_R2 <- r.squaredGLMM(model4)
+
+# Make a table of the values:
+df <- data.frame(M1_R2, M2_R2, M3_R2, M4_R2)
+colnames(df) <- c('Model1 R2m', 'Model1 R2c', 'Model2 R2m', 'Model2 R2c',
+                  'Model3 R2m', 'Model3 R2c', 'Model4 R2m', 'Model4 R2c')
+print(df)
+
+
+# Marginal R_GLMM² represents the variance explained by the fixed effects
+# Conditional R_GLMM² is interpreted as a variance explained by the entire model, including both fixed and random effects
+
+```
+
+# Compare all models with AIC and AICc values:
+```{r}
+
+AICc(model1, model2, model3, model4)
+AIC(model1, model2, model3, model4)
+
+```
+
+# Check for normal distirbutions in the model residuals:
+```{r}
+
+shapiro.test(resid(model1)) 
+shapiro.test(resid(model2)) 
+shapiro.test(resid(model3)) 
+shapiro.test(resid(model4)) 
+
+```
+
+# Check for the residual standard eroor in each model:
+```{r}
+
+sigma(model1)
+sigma(model2)
+sigma(model3)
+sigma(model4)
+
+```
+
+
+
+
+
+
+
