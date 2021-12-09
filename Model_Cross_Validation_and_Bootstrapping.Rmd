@@ -50,9 +50,21 @@ ggplot(total_data, aes(Chl, TEP, colour = Nitrate)) +
 
 ggplot(total_data, aes(Log_Chl, TEP, colour = Nitrate) ) + 
   geom_point() +
-  scale_color_viridis(option = "A") + 
-  stat_smooth(method = lm, se = FALSE) + 
-  theme_pubr()
+  scale_color_viridis(option = "H") + 
+  stat_smooth(method = lm, se = FALSE, lty = 'dashed', color = 'black') + 
+  xlab("") +
+  ylab("") +
+  theme(legend.title = element_blank()) +
+  theme_classic()
+
+ggplot(total_data, aes(Log_MLD, TEP, colour = MLD) ) + 
+  geom_point() +
+  scale_color_viridis(option = "H") + 
+  stat_smooth(method = lm, se = FALSE, lty = 'dashed', color = 'black') + 
+  xlab("") +
+  ylab("") +
+  theme(legend.title = element_blank()) +
+  theme_classic()
 
 ```
 
@@ -63,6 +75,8 @@ ggplot(total_data, aes(Log_Chl, TEP, colour = Nitrate) ) +
 
 # Create the linear mixed effects model:
 model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)
+
+model1 <- lm(TEP ~ Log_Chl + Log_MLD + DO + Nitrate, data = UpperMixed_data)
 
 summary(model1)  # Get a model summary
 
@@ -125,6 +139,8 @@ sample_predict_3 <- NULL
 sample_predict_4 <- NULL
 sample_predict_5 <- NULL
 sample_predict_6 <- NULL
+sample_predict_7 <- NULL
+sample_predict_8 <- NULL
 sample_train <- NULL
 RMSE <- NULL
 MAE <- NULL
@@ -138,6 +154,12 @@ RMSE_5 <- NULL
 MAE_5 <- NULL
 RMSE_6 <- NULL
 MAE_6 <- NULL
+RMSE_7 <- NULL
+MAE_7 <- NULL
+RMSE_8 <- NULL
+MAE_8 <- NULL
+
+
 
 
 # Loop through model prediciton and cross validation 500x. The model is trained on 95% of the data, and validated on the other 5%, 500x.
@@ -157,6 +179,8 @@ for (i in 1:50) {
   model_bootstrap_4 <- lm(TEP ~ MLD + Nitrate + DO + factor(Season), data = train.data1)
   model_bootstrap_5 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = train.data1) 
   model_bootstrap_6 <- lmer(TEP ~ Log_Chl + Nitrate + DO + (1|Season), data = train.data1)
+  model_bootstrap_7 <- lmer(TEP ~ Log_Chl + Log_MLD + (1|Season), data = train.data1) 
+  model_bootstrap_8 <- lmer(TEP ~ Log_Chl + Log_MLD + Temperature + (1|Season), data = train.data1)
   
   # Model 'true' training points, applies to each model:
   sample_train <- c(sample_train, test.data1$TEP)
@@ -214,87 +238,76 @@ for (i in 1:50) {
   RMSE_6 <- c(RMSE_6, RMSE(sample_predict_6, sample_train))  # RMSE:
   MAE_6 <- c(MAE_5, MAE(sample_predict_6, sample_train))  # MAE:
   
+  # 7
+  sample_predict_7 <- 
+    c(sample_predict_7, predict(model_bootstrap_7, test.data1, type = "response", 
+                              allow.new.levels = TRUE))
+  
+  RMSE_7 <- c(RMSE_7, RMSE(sample_predict_7, sample_train))  # RMSE:
+  MAE_7 <- c(MAE_7, MAE(sample_predict_7, sample_train))  # MAE:
+  
+  # 8
+  sample_predict_8 <- 
+    c(sample_predict_8, predict(model_bootstrap_8, test.data1, type = "response", 
+                              allow.new.levels = TRUE))
+  
+  RMSE_8 <- c(RMSE_8, RMSE(sample_predict_8, sample_train))  # RMSE:
+  MAE_8 <- c(MAE_8, MAE(sample_predict_8, sample_train))  # MAE:
+  
 }
 
 # The above loop generated 1000 different regression models with model coefficients, y intercepts and predictions, specified below for each of the models created: 
-predictions <- cbind(sample_predict, sample_predict_2, sample_predict_3, sample_predict_4, sample_predict_5, sample_predict_6, sample_train)
+predictions <- cbind(sample_predict, sample_predict_2, sample_predict_3, sample_predict_4, sample_predict_5, sample_predict_6, sample_predict_7, sample_predict_8, sample_train)
 predictions <- as.data.frame(predictions)  # as a data frame
 
 ```
 
 
 # Plot the results of the cross validations:
-```{r, fig.height=10, fig.width=8}
+```{r}
 
+# Create a function to subset the predictions dataframe and returns a plot:
 
-# Plot the bootstrapping cross validation:
-Model1 <- ggplot(predictions, aes(sample_train)) +
-  geom_point(aes(y = sample_predict), alpha = 0.6) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
-  #geom_smooth(method = 'lm', aes(y = sample_predict)) +
-  xlab("") +
-  ylab("") +
-  ggtitle("Log_Chl") +
-  xlim(0, 150) +
-  ylim(0, 150) +
-  theme_classic()
+# Create the workable dataframe:
+# Create example data frame
+plot_df <- data.frame(
+                     Model1 = sample_predict,
+                     Model2 = sample_predict_2,
+                     Model3 = sample_predict_3,
+                     Model4 = sample_predict_4,
+                     Model5 = sample_predict_5,
+                     Model6 = sample_predict_6,
+                     Model7 = sample_predict_7,
+                     Model8 = sample_predict_8,
+                     train_data = sample_train)
 
-Model2 <- ggplot(predictions, aes(sample_train)) +
-  geom_point(aes(y = sample_predict_2), alpha = 0.6) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
-  #geom_smooth(method = 'lm', aes(y = sample_predict_2)) +
-  xlab("") +
-  ylab("") +
-  ggtitle("Log_Chl + Nitrate") +
-  xlim(0, 150) +
-  ylim(0, 150) +
-  theme_classic()
+Model1 = cbind(predictions = sample_predict, sample_train)
+Model2 = cbind(predictions = sample_predict_2, sample_train)
+Model3 = cbind(predictions = sample_predict_3, sample_train)
+Model4 = cbind(predictions = sample_predict_4, sample_train)
+Model5 = cbind(predictions = sample_predict_5, sample_train)
+Model6 = cbind(predictions = sample_predict_6, sample_train)
+Model7 = cbind(predictions = sample_predict_7, sample_train)
+Model8 = cbind(predictions = sample_predict_8, sample_train)
 
-Model3 <- ggplot(predictions, aes(sample_train)) +
-  geom_point(aes(y = sample_predict_3), alpha = 0.6) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
-  #geom_smooth(method = 'lm', aes(y = sample_predict_3)) +
-  xlab("") +
-  ylab("") +
-  ggtitle("Log_Chl + Nitrate + DO + factor(Season)") +
-  xlim(0, 150) +
-  ylim(0, 150) +
-  theme_classic()
+list = c("Model1", "Model2", "Model3", "Model4", "Model5", "Model6", "Model7", "Model8")
 
-Model4 <- ggplot(predictions, aes(sample_train)) +
-  geom_point(aes(y = sample_predict_4), alpha = 0.6) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
-  #geom_smooth(method = 'lm', aes(y = sample_predict_4)) +
-  xlab("") +
-  ylab("") +
-  ggtitle("MLD + Nitrate + DO") +
-  xlim(0, 150) +
-  ylim(0, 150) +
-  theme_classic()
+# Design a function
+myplot <- function(data, title){
+  ggplot(data, aes(x = sample_train, y = predictions)) +
+    geom_point(alpha = 0.7) +
+    geom_smooth(method = 'lm') + 
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    ylim(0, 160) +
+    xlim(0, 160) +
+    theme_classic() +
+    labs(title = title)
+}
 
-Model5 <- ggplot(predictions, aes(sample_train)) +
-  geom_point(aes(y = sample_predict_5), alpha = 0.6) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
-  #geom_smooth(method = 'lm', aes(y = sample_predict_4)) +
-  xlab("") +
-  ylab("") +
-  ggtitle("Log_Chl + Temp + (1|Season)") +
-  xlim(0, 150) +
-  ylim(0, 150) +
-  theme_classic()
+for(i in list){
+  print(myplot(get(i), i))
+}
 
-Model6 <- ggplot(predictions, aes(sample_train)) +
-  geom_point(aes(y = sample_predict_6), alpha = 0.6) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # Add a 1:1 line
-  #geom_smooth(method = 'lm', aes(y = sample_predict_4)) +
-  xlab("") +
-  ylab("") +
-  ggtitle("Log_Chl + Temp + Nitrate + DO + (1|Season)") +
-  xlim(0, 150) +
-  ylim(0, 150) +
-  theme_classic()
-
-ggarrange(Model1, Model2, Model3, Model4, Model5, Model6, ncol = 2, nrow = 3)
 ```
 
 
