@@ -1,0 +1,195 @@
+---
+title: "Stepwise_Regression_and_Model_Selection"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Upload required libraries:
+```{r}
+
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+suppressMessages(library(ggpubr))
+suppressMessages(library(MuMIn))
+suppressMessages(library(lme4))
+suppressMessages(library(feather))
+suppressMessages(library(arrow))
+suppressMessages(library(dplyr))
+suppressMessages(library(viridis))
+
+```
+
+
+# Upload all the data, and sort into workable dataframes:
+```{r}
+
+# Upload the data from a total data file:
+total_data <- read.csv("Total_Sat_Data_All_Var.csv")
+
+UpperMixed_data <- total_data %>% select(TEP, Log_Chl, Temperature, Nitrate, DO, MLD, Season)
+
+```
+
+
+# Step-wise Regressions models: Both forward and backward sequences:
+```{r}
+
+# Define intercept-only model
+intercept_only <- lm(TEP ~ 1, data = UpperMixed_data)
+
+# Define model with all predictors
+all <- lm(TEP ~ ., data = UpperMixed_data)
+
+```
+
+
+# Perform forward stepwise regression
+```{r}
+forward <- step(intercept_only, direction='forward', scope=formula(all), trace=0)
+forward$anova
+forward$coefficients
+
+plot(forward$residuals ~ forward$fitted.values)
+
+```
+
+# Perform backward stepwise regression
+```{r}
+
+# Perform backward stepwise regression
+backward <- step(all, direction ='backward', scope = formula(all), trace=0)
+backward$anova
+backward$coefficients
+
+plot(backward$residuals ~ backward$fitted.values)
+
+```
+
+
+# Checking model assumptions: Equal variance and normal distribution of model residuals:
+```{r}
+
+# Get the linear model residuals:
+UpperMixed_data$resid1 <- resid(forward)  
+UpperMixed_data$predict1 <- predict(forward) 
+
+UpperMixed_data$resid2 <- resid(backward)  
+UpperMixed_data$predict2 <- predict(backward) 
+
+# Residual, Q-Q, Cooks distance plots:
+plot(forward)  # Residuals
+plot(backward)
+
+# Plot the distribution of the linear model residuals:
+H_model1 <- ggplot(data = UpperMixed_data, aes(resid1)) + 
+  geom_histogram(binwidth = 0.5, colour = "black", fill = "white") +
+  xlab("Residuals") +
+  ylab("Count") +
+  theme_pubr()
+
+H_model2 <- ggplot(data = UpperMixed_data, aes(resid2)) + 
+  geom_histogram(binwidth = 0.5, colour = "black", fill = "white") +
+  xlab("Residuals") +
+  ylab("Count") +
+  theme_pubr()
+
+ggarrange(H_model1, H_model2)
+
+
+# Use the Shapiro-Wilks test to test for normality distributions in the residuals:
+shapiro.test(UpperMixed_data$resid1) 
+shapiro.test(UpperMixed_data$resid2) 
+
+summary(forward)
+summary(backward)
+```
+
+# Create a series of models and cross validate each one over 100x in order to compare the predicitive ability of each model.
+```{r}
+
+# Containers for the coefficients, predictions and accuracy measurements:
+
+# Model 1: Forward regression
+sample_predict <- NULL
+sample_train <- NULL
+RMSE <- NULL
+MAE <- NULL
+
+# Model 2: Backward regression
+sample_predict2 <- NULL
+sample_train2 <- NULL
+RMSE2 <- NULL
+MAE2 <- NULL
+
+
+
+# Loop through model prediciton and cross validation 500x. The model is trained on 95% of the data, and validated on the other 5%, 500x.
+
+for (i in 1:50) {
+  
+  #Creating a re-sampled data set from the total data:
+  training.samples <- createDataPartition(UpperMixed_data$TEP, p = 0.95, list = FALSE)
+  train.data1  <- UpperMixed_data[training.samples, ]  # Training set
+  test.data1 <- UpperMixed_data[-training.samples, ]  # Testing set
+  
+  # Running the model on the partitioned training data:
+  
+  model_bootstrap_forward <- lm(TEP ~ Log_Chl + Nitrate + Temperature + DO + factor(Season), data = train.data1)
+  model_bootstrap_backward <- lm(TEP ~ Log_Chl + Temperature + DO + factor(Season), data = train.data1) 
+
+  # Model 'true' training points, applies to each model:
+  sample_train <- c(sample_train, test.data1$TEP)
+  
+  
+  # Model predictions and error calculations:
+  
+  # Forward:
+  sample_predict <- 
+    c(sample_predict, predict(model_bootstrap_forward, test.data1, type = "response", 
+                              allow.new.levels = TRUE))
+    
+  RMSE <- c(RMSE, RMSE(sample_predict, sample_train))  # RMSE:
+  MAE <- c(MAE, MAE(sample_predict, sample_train))  # MAE:
+
+  # Backward:
+  sample_predict2 <- 
+    c(sample_predict2, predict(model_bootstrap_backward, test.data1, type = "response", 
+                              allow.new.levels = TRUE))
+    
+  RMSE2 <- c(RMSE2, RMSE(sample_predict2, sample_train))  # RMSE:
+  MAE2 <- c(MAE2, MAE(sample_predict2, sample_train))  # MAE:
+  
+  
+}
+
+# The above loop generated 1000 different regression models with model coefficients, y intercepts and predictions, specified below for each of the models created: 
+predictions <- cbind(sample_predict, sample_predict2, sample_train)
+predictions <- as.data.frame(predictions)  # as a data frame
+
+```
+
+
+# Plot the results of the cross validation:
+```{r}
+
+forward_CV <- ggplot(predictions, aes(x = sample_train, y = sample_predict)) +
+    geom_point(alpha = 0.7, colour = "blue") +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    ylim(0, 160) +
+    xlim(0, 160) 
+
+backward_CV <- ggplot(predictions, aes(x = sample_train, y = sample_predict2)) +
+    geom_point(alpha = 0.7, colour = "blue") +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    ylim(0, 160) +
+    xlim(0, 160) 
+
+ggarrange(forward_CV, backward_CV)
+
+```
+
+
