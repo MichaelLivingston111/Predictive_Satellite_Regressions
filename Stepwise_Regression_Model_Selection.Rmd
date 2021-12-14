@@ -30,7 +30,7 @@ suppressMessages(library(viridis))
 # Upload the data from a total data file:
 total_data <- read.csv("Total_Sat_Data_All_Var.csv")
 
-UpperMixed_data <- total_data %>% select(TEP, Log_Chl, Temperature, Nitrate, DO, MLD, Season)
+UpperMixed_data <- total_data %>% select(TEP, Log_Chl, Temperature, Nitrate, DO, MLD, Season, Sigma)
 
 ```
 
@@ -67,6 +67,20 @@ backward$coefficients
 
 plot(backward$residuals ~ backward$fitted.values)
 
+```
+
+
+# Perform both backward and forward stepwise regression
+```{r}
+
+# Perform backward stepwise regression
+both <- step(intercept_only, direction ='both', scope = formula(all), trace=0)
+both$anova
+both$coefficients
+
+plot(both$residuals ~ both$fitted.values)
+
+# This sequence comes to the same 'conclusions', or combinations of predictors, as the backwards regressions.
 ```
 
 
@@ -138,8 +152,10 @@ for (i in 1:50) {
   
   # Running the model on the partitioned training data:
   
-  model_bootstrap_forward <- lm(TEP ~ Log_Chl + Nitrate + Temperature + DO + factor(Season), data = train.data1)
-  model_bootstrap_backward <- lm(TEP ~ Log_Chl + Temperature + DO + factor(Season), data = train.data1) 
+  model_bootstrap_forward <- lm(TEP ~ Log_Chl + Nitrate + Temperature + DO + 
+                                  factor(Season) + Sigma, data = train.data1)
+  model_bootstrap_backward <- lm(TEP ~ Log_Chl + Temperature + DO + 
+                                   factor(Season) + Sigma, data = train.data1) 
 
   # Model 'true' training points, applies to each model:
   sample_train <- c(sample_train, test.data1$TEP)
@@ -191,5 +207,45 @@ backward_CV <- ggplot(predictions, aes(x = sample_train, y = sample_predict2)) +
 ggarrange(forward_CV, backward_CV)
 
 ```
+
+# Print the mean aboslute errors and root mean square errors for both models:
+```{r}
+
+
+# Create data frames for the accuracy measurements:
+RMSE <- cbind(RMSE, RMSE2)
+RMSE <- as.data.frame(RMSE)
+
+MAE <- cbind(MAE, MAE2)
+MAE <- as.data.frame(MAE)
+
+mean_total <- mean(UpperMixed_data$TEP)  # Calculate mean of true values
+
+# Get the average MAE and RMSE for each model:
+
+MAE <- colMeans(MAE)
+RMSE <- colMeans(RMSE)
+
+print(MAE)
+print(RMSE)
+
+```
+
+
+# Compare the two selected models with a few more theoretical models:
+```{r}
+
+Theo_Model1 <- lm(TEP ~ Log_Chl + Temperature + DO + Nitrate + factor(Season), data = UpperMixed_data)
+Theo_Model2 <- lm(TEP ~ Log_Chl + Temperature + DO + factor(Season), data = UpperMixed_data)
+Theo_Model3 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)
+Theo_Model4 <- lm(TEP ~ Log_Chl + Temperature + factor(Season), data = UpperMixed_data)
+Theo_Model5 <- lmer(TEP ~ Log_Chl + Temperature + DO + Nitrate + (1|Season), data = UpperMixed_data)
+
+
+AIC(forward, backward, Theo_Model1, Theo_Model2, Theo_Model3, Theo_Model4, Theo_Model5)
+AICc(forward, backward, Theo_Model1, Theo_Model2, Theo_Model3, Theo_Model4, Theo_Model5)
+```
+
+
 
 
