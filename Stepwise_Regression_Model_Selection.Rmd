@@ -20,6 +20,7 @@ suppressMessages(library(feather))
 suppressMessages(library(arrow))
 suppressMessages(library(dplyr))
 suppressMessages(library(viridis))
+suppressMessages(library(grid))
 
 ```
 
@@ -30,7 +31,7 @@ suppressMessages(library(viridis))
 # Upload the data from a total data file:
 total_data <- read.csv("Total_Sat_Data_All_Var.csv")
 
-UpperMixed_data <- total_data %>% select(TEP, Log_Chl, Temperature, Nitrate, DO, MLD, Season, Sigma)
+UpperMixed_data <- total_data %>% select(TEP, Log_Chl, Temperature, Nitrate, DO, MLD, Season, Avg_PAR, Silicate)
 
 ```
 
@@ -122,6 +123,7 @@ summary(forward)
 summary(backward)
 ```
 
+
 # Create a series of models and cross validate each one over 100x in order to compare the predicitive ability of each model.
 ```{r}
 
@@ -135,13 +137,31 @@ MAE <- NULL
 
 # Model 2: Backward regression
 sample_predict2 <- NULL
-sample_train2 <- NULL
 RMSE2 <- NULL
 MAE2 <- NULL
 
+# Model3: Theoretical
+sample_predict_3 <- NULL
+RMSE3 <- NULL
+MAE3 <- NULL
+
+# Model4: Theoretical
+sample_predict_4 <- NULL
+RMSE4 <- NULL
+MAE4 <- NULL
+
+# Model5: Theoretical
+sample_predict_5 <- NULL
+RMSE5 <- NULL
+MAE5 <- NULL
+
+# Model6: Theoretical
+sample_predict_6 <- NULL
+RMSE6 <- NULL
+MAE6 <- NULL
 
 
-# Loop through model prediciton and cross validation 500x. The model is trained on 95% of the data, and validated on the other 5%, 500x.
+# Loop through model prediction and cross validation 500x. The model is trained on 95% of the data, and validated on the other 5%, 500x.
 
 for (i in 1:50) {
   
@@ -153,9 +173,22 @@ for (i in 1:50) {
   # Running the model on the partitioned training data:
   
   model_bootstrap_forward <- lm(TEP ~ Log_Chl + Nitrate + Temperature + DO + 
-                                  factor(Season) + Sigma, data = train.data1)
+                                  factor(Season), data = train.data1)
+  
   model_bootstrap_backward <- lm(TEP ~ Log_Chl + Temperature + DO + 
-                                   factor(Season) + Sigma, data = train.data1) 
+                                   factor(Season), data = train.data1) 
+  
+  Theo_Model3 <- lmer(TEP ~ Log_Chl + Temperature + DO + Nitrate + (1|Season), 
+                    data = train.data1)  # Complex
+
+  Theo_Model4 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), 
+                    data = train.data1)  # Satellite
+
+  Theo_Model5 <- lm(TEP ~ Log_Chl, 
+                  data = train.data1)  # Simple
+
+  Theo_Model6 <- lm(TEP ~ DO + Nitrate + factor(Season), 
+                  data = train.data1)  # Simple
 
   # Model 'true' training points, applies to each model:
   sample_train <- c(sample_train, test.data1$TEP)
@@ -179,44 +212,136 @@ for (i in 1:50) {
   RMSE2 <- c(RMSE2, RMSE(sample_predict2, sample_train))  # RMSE:
   MAE2 <- c(MAE2, MAE(sample_predict2, sample_train))  # MAE:
   
+  # Model 3:
+  sample_predict_3 <- 
+    c(sample_predict_3, predict(Theo_Model3, test.data1, type = "response", 
+                              allow.new.levels = TRUE))
+    
+  RMSE3 <- c(RMSE3, RMSE(sample_predict_3, sample_train))  # RMSE:
+  MAE3 <- c(MAE3, MAE(sample_predict_3, sample_train))  # MAE:
   
+  # Model 4:
+  sample_predict_4 <- 
+    c(sample_predict_4, predict(Theo_Model4, test.data1, type = "response", 
+                              allow.new.levels = TRUE))
+    
+  RMSE4 <- c(RMSE4, RMSE(sample_predict_4, sample_train))  # RMSE:
+  MAE4 <- c(MAE4, MAE(sample_predict_4, sample_train))  # MAE:
+  
+  # Model 5:
+  sample_predict_5 <- 
+    c(sample_predict_5, predict(Theo_Model5, test.data1, type = "response", 
+                              allow.new.levels = TRUE))
+    
+  RMSE5 <- c(RMSE5, RMSE(sample_predict_5, sample_train))  # RMSE:
+  MAE5 <- c(MAE5, MAE(sample_predict_5, sample_train))  # MAE:
+  
+  # Model 6:
+  sample_predict_6 <- 
+    c(sample_predict_6, predict(Theo_Model6, test.data1, type = "response", 
+                              allow.new.levels = TRUE))
+    
+  RMSE6 <- c(RMSE6, RMSE(sample_predict_6, sample_train))  # RMSE:
+  MAE6 <- c(MAE6, MAE(sample_predict_6, sample_train))  # MAE:
 }
 
 # The above loop generated 1000 different regression models with model coefficients, y intercepts and predictions, specified below for each of the models created: 
-predictions <- cbind(sample_predict, sample_predict2, sample_train)
+predictions <- cbind(sample_predict, sample_predict2, sample_predict_3, 
+                     sample_predict_4, sample_predict_5, sample_predict_6, sample_train)
 predictions <- as.data.frame(predictions)  # as a data frame
 
 ```
 
 
 # Plot the results of the cross validation:
-```{r}
+```{r, fig.height=6, fig.width=12}
 
 forward_CV <- ggplot(predictions, aes(x = sample_train, y = sample_predict)) +
-    geom_point(alpha = 0.7, colour = "blue") +
+    geom_point(alpha = 1, colour = "blue") +
     geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    ggtitle("A: Chl (log) + Nitrate + Temperature + DO + factor(Season)") +
     ylim(0, 160) +
-    xlim(0, 160) 
+    xlim(0, 160) +
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
 
 backward_CV <- ggplot(predictions, aes(x = sample_train, y = sample_predict2)) +
-    geom_point(alpha = 0.7, colour = "blue") +
+    geom_point(alpha = 1, colour = "blue") +
     geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    ggtitle("B: Chl (log) + Temperature + DO + factor(Season)") +
     ylim(0, 160) +
-    xlim(0, 160) 
+    xlim(0, 160) +
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
 
-ggarrange(forward_CV, backward_CV)
+Model3 <- ggplot(predictions, aes(x = sample_train, y = sample_predict_3)) +
+    geom_point(alpha = 1, colour = "red") +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    ggtitle("C: Chl (log) + Temperature + DO + Nitrate + (1|Season)") +
+    ylim(0, 160) +
+    xlim(0, 160) +
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
+
+Model4 <- ggplot(predictions, aes(x = sample_train, y = sample_predict_4)) +
+    geom_point(alpha = 1, colour = "red") +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    ggtitle("D: Chl (log) + Temperature + (1|Season)") +
+    ylim(0, 160) +
+    xlim(0, 160) +
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
+
+Model5 <- ggplot(predictions, aes(x = sample_train, y = sample_predict_5)) +
+    geom_point(alpha = 1, colour = "black") +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    ggtitle("E: Chl (log)") + 
+    ylim(0, 160) +
+    xlim(0, 160) +
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
+
+Model6 <- ggplot(predictions, aes(x = sample_train, y = sample_predict_6)) +
+    geom_point(alpha = 1, colour = "black") +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    ggtitle("F: DO + Nitrate + factor(Season)") +
+    ylim(0, 160) +
+    xlim(0, 160) +
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
+
+Figure <- ggarrange(forward_CV, Model3, Model5, 
+          backward_CV, Model4, Model6, nrow = 2, ncol = 3)
+
+
+annotate_figure(Figure, 
+                bottom = textGrob("Measured TEP ", gp = gpar(cex = 2)),
+                left = textGrob("Predicted TEP ", gp = gpar(cex = 2), rot = 90))
 
 ```
+
 
 # Print the mean aboslute errors and root mean square errors for both models:
 ```{r}
 
 
 # Create data frames for the accuracy measurements:
-RMSE <- cbind(RMSE, RMSE2)
+RMSE <- cbind(RMSE, RMSE2, RMSE3, RMSE4, RMSE5, RMSE6)
 RMSE <- as.data.frame(RMSE)
 
-MAE <- cbind(MAE, MAE2)
+MAE <- cbind(MAE, MAE2, MAE3, MAE4, MAE5, MAE6)
 MAE <- as.data.frame(MAE)
 
 mean_total <- mean(UpperMixed_data$TEP)  # Calculate mean of true values
@@ -235,17 +360,152 @@ print(RMSE)
 # Compare the two selected models with a few more theoretical models:
 ```{r}
 
-Theo_Model1 <- lm(TEP ~ Log_Chl + Temperature + DO + Nitrate + factor(Season), data = UpperMixed_data)
-Theo_Model2 <- lm(TEP ~ Log_Chl + Temperature + DO + factor(Season), data = UpperMixed_data)
-Theo_Model3 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)
-Theo_Model4 <- lm(TEP ~ Log_Chl + Temperature + factor(Season), data = UpperMixed_data)
-Theo_Model5 <- lmer(TEP ~ Log_Chl + Temperature + DO + Nitrate + (1|Season), data = UpperMixed_data)
+Theo_Model3 <- lmer(TEP ~ Log_Chl + Temperature + DO + Nitrate + (1|Season), 
+                    data = UpperMixed_data)  # Complex
+
+Theo_Model4 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), 
+                    data = UpperMixed_data)  # Satellite
+
+Theo_Model5 <- lm(TEP ~ Log_Chl, 
+                  data = UpperMixed_data)  # Simple
+
+Theo_Model6 <- lm(TEP ~ DO + Nitrate + factor(Season), 
+                  data = UpperMixed_data)  # Simple
 
 
-AIC(forward, backward, Theo_Model1, Theo_Model2, Theo_Model3, Theo_Model4, Theo_Model5)
-AICc(forward, backward, Theo_Model1, Theo_Model2, Theo_Model3, Theo_Model4, Theo_Model5)
+# Check the AIC and AICc values for each model:
+AIC(forward, backward, Theo_Model3, Theo_Model4, Theo_Model5, Theo_Model6)
+AICc(forward, backward, Theo_Model3, Theo_Model4, Theo_Model5, Theo_Model6)
+
+
+# Check r squared for each model:
+r.squaredGLMM(forward)
+r.squaredGLMM(backward)
+r.squaredGLMM(Theo_Model3)
+r.squaredGLMM(Theo_Model4)
+r.squaredGLMM(Theo_Model5)
+r.squaredGLMM(Theo_Model6)
+
+# Test for normal distribution in residuals:
+shapiro.test(resid(forward)) 
+shapiro.test(resid(backward)) 
+shapiro.test(resid(Theo_Model3)) 
+shapiro.test(resid(Theo_Model4)) 
+shapiro.test(resid(Theo_Model5)) 
+shapiro.test(resid(Theo_Model6)) 
+
+# Check for aoutcorrelation amongst predictors:
+car::vif(forward)
+car::vif(backward)
+car::vif(Theo_Model3)
+car::vif(Theo_Model4)
+# car::vif(Theo_Model5)  N/A
+car::vif(Theo_Model6)
 ```
 
 
+# Plot model residuals vs fitted values for each model:
+```{r, fig.height=6, fig.width=12}
+
+# Get the fitted and residual values:
+UpperMixed_data$forward_resid <- resid(forward)
+UpperMixed_data$forward_predict <- predict(forward)
+
+forward_resid <- ggplot(UpperMixed_data, aes(x = forward_predict, y = forward_resid)) +
+    geom_point(alpha = 1, colour = "blue") +
+    geom_abline(slope = 0, intercept = 0, linetype = "dashed") +
+    ggtitle("A: Chl (log) + Nitrate + Temperature + DO + factor(Season)") +
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
+
+# Get the fitted and residual values:
+UpperMixed_data$backward_resid <- resid(backward)
+UpperMixed_data$backward_predict <- predict(backward)
+
+backward_resid <- ggplot(UpperMixed_data, aes(x = backward_predict, y = backward_resid)) +
+    geom_point(alpha = 1, colour = "blue") +
+    geom_abline(slope = 0, intercept = 0, linetype = "dashed") +
+    ggtitle("B: Chl (log) + Temperature + DO + factor(Season)") +
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
+
+# Get the fitted and residual values:
+UpperMixed_data$Theo3_resid <- resid(Theo_Model3)
+UpperMixed_data$Theo3_predict <- predict(Theo_Model3)
+
+Model3_resid <- ggplot(UpperMixed_data, aes(x = Theo3_predict, y = Theo3_resid)) +
+    geom_point(alpha = 1, colour = "red") +
+    geom_abline(slope = 0, intercept = 0, linetype = "dashed") +
+    ggtitle("C: Chl (log) + Temperature + DO + Nitrate + (1|Season)") +
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
+
+# Get the fitted and residual values:
+UpperMixed_data$Theo4_resid <- resid(Theo_Model4)
+UpperMixed_data$Theo4_predict <- predict(Theo_Model4)
+
+Model4_resid <- ggplot(UpperMixed_data, aes(x = Theo4_predict, y = Theo4_resid)) +
+    geom_point(alpha = 1, colour = "red") +
+    geom_abline(slope = 0, intercept = 0, linetype = "dashed") +
+    ggtitle("D: Chl (log) + Temperature + (1|Season)") +
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
+
+# Get the fitted and residual values:
+UpperMixed_data$Theo5_resid <- resid(Theo_Model5)
+UpperMixed_data$Theo5_predict <- predict(Theo_Model5)
+
+Model5_resid <- ggplot(UpperMixed_data, aes(x = Theo5_predict, y = Theo5_resid)) +
+    geom_point(alpha = 1, colour = "black") +
+    geom_abline(slope = 0, intercept = 0, linetype = "dashed") +
+    ggtitle("E: Chl (log)") + 
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
+
+# Get the fitted and residual values:
+UpperMixed_data$Theo6_resid <- resid(Theo_Model6)
+UpperMixed_data$Theo6_predict <- predict(Theo_Model6)
+
+Model6_resid <- ggplot(UpperMixed_data, aes(x = Theo6_predict, y = Theo6_resid)) +
+    geom_point(alpha = 1, colour = "black") +
+    geom_abline(slope = 0, intercept = 0, linetype = "dashed") +
+    ggtitle("F: DO + Nitrate + factor(Season)") +
+    ylab("") +
+    xlab("") +
+    theme(plot.title = element_text(size=14, face="bold.italic")) +
+    theme_pubr()
+
+Figure <- ggarrange(forward_resid, Model3_resid, Model5_resid, 
+          backward_resid, Model4_resid, Model6_resid, nrow = 2, ncol = 3)
+
+
+annotate_figure(Figure, 
+                bottom = textGrob("Fitted Values ", gp = gpar(cex = 2)),
+                left = textGrob("Residuals ", gp = gpar(cex = 2), rot = 90))
+
+```
+
+# Check for heteroscedasticity:
+```{r}
+
+car::ncvTest(forward)
+car::ncvTest(backward)
+
+lmtest::bptest(forward)
+lmtest::bptest(backward)
+lmtest::bptest(Theo_Model5)
+lmtest::bptest(Theo_Model6)
+
+```
 
 
