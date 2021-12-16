@@ -31,7 +31,7 @@ suppressMessages(library(grid))
 # Upload the data from a total data file:
 total_data <- read.csv("Total_Sat_Data_All_Var.csv")
 
-UpperMixed_data <- total_data %>% select(TEP, Log_Chl, Temperature, Nitrate, DO, MLD, Season, Avg_PAR, Silicate)
+UpperMixed_data <- total_data %>% select(TEP, Temperature, Nitrate, DO, MLD, Season, Avg_PAR, Silicate, Log_Chl)
 
 ```
 
@@ -507,5 +507,33 @@ lmtest::bptest(Theo_Model5)
 lmtest::bptest(Theo_Model6)
 
 ```
+
+# Leave one out cross validation (LOOCV)
+```{r}
+
+# Specify the cross-validation method
+ctrl <- trainControl(method = "LOOCV")
+
+
+# Fit a regression model and use LOOCV to evaluate performance on the 'forwards' model:
+forwards <- train(TEP ~ Log_Chl + Temperature + DO + Nitrate + factor(Season), data = UpperMixed_data,
+               method = "lm", trControl = ctrl)
+print(forwards)
+
+# Fit a regression model and use LOOCV to evaluate performance on the 'backwards' model:
+backwards <- train(TEP ~ Log_Chl + Temperature + DO + factor(Season), data = UpperMixed_data,
+               method = "lm", trControl = ctrl)
+print(backwards)
+
+# Fit a regression model and use LOOCV to evaluate performance on the 'optimal' model:
+optimal <- train(TEP ~ Log_Chl + Temperature + DO + Season, data = UpperMixed_data,
+               method = "lm", trControl = ctrl)
+print(optimal)
+summary(optimal)
+
+
+```
+
+
 
 
