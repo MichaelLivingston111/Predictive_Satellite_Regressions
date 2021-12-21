@@ -1,0 +1,79 @@
+---
+title: "Model_Predictions"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# This file contains code that inputs all satellite data cleaned and sorted in python, and makes predictions from the selected model below. I prefer to use the R statistical language to create the model and make predicitons as I find it more intutive. Once the predictions are made, they are packaged into another dataframe. This dataframe is then utilized in the python file "Satellite regressions" to visualize all the predicitons.
+
+
+# Load required libraries:
+```{r}
+
+suppressMessages(library(caret))
+suppressMessages(library(lme4))
+suppressMessages(library(feather))
+suppressMessages(library(arrow))
+suppressMessages(library(dplyr))
+suppressMessages(library(car))
+
+```
+
+
+# Create the model of choice. This model was validated and selected in the R code "Stepwise_Regression_Model_Selection":
+```{r}
+# Upload the data from a total data file:
+total_data <- read.csv("Total_Sat_Data_All_Var.csv")
+UpperMixed_data <- total_data %>% select(TEP, Log_Chl, Temperature, Log_MLD, MLD, Season, POC)
+
+# Create the model:
+model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)
+
+# Examine the model summary and R2:
+summary(model1)
+r.squaredGLMM(model1)
+
+```
+
+
+# Load the required satellite data: Already cleaned and sorted:
+```{r}
+
+# 8 day spring 2021
+df_Spring_8D_2021 <- arrow::read_feather('May_2021_LineP.feather')
+
+# 8 day summer 2021
+df_Summer_8D_2021 <- arrow::read_feather('Aug_2021_LineP.feather')
+
+```
+
+
+# Make the predicitons from these dataframes:
+```{r}
+
+# Spring 8D 2021
+Predictions_Spring_8D_2021 <- predict(model1, df_Spring_8D_2021, type = "response")
+Predictions_Spring_8D_2021 <- as.data.frame(Predictions_Spring_8D_2021)  # Create a data frame of predictions
+
+
+# Summer 8D 2021
+Predictions_Summer_8D_2021 <- predict(model1, df_Summer_8D_2021, type = "response")
+Predictions_Summer_8D_2021 <- as.data.frame(Predictions_Summer_8D_2021)  # Create a data frame of predictions
+
+```
+
+
+# Package the files back into a dataframe transferrable to python:
+```{r}
+
+feather::write_feather(Predictions_Spring_8D_2021, 'May_June_2021_Predictions.feather')
+feather::write_feather(Predictions_Summer_8D_2021, 'Aug_Sept_2021_Predictions.feather')
+
+```
+
+
+
+
