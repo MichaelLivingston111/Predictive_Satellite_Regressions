@@ -19,6 +19,8 @@ suppressMessages(library(feather))
 suppressMessages(library(arrow))
 suppressMessages(library(dplyr))
 suppressMessages(library(car))
+suppressMessages(library(caret))
+suppressMessages(library(MuMIn))
 
 ```
 
@@ -48,6 +50,9 @@ df_Spring_8D_2021 <- arrow::read_feather('May_2021_LineP.feather')
 # 8 day summer 2021
 df_Summer_8D_2021 <- arrow::read_feather('Aug_2021_LineP.feather')
 
+# 8 day spring 2019
+df_Spring_8D_2019 <- arrow::read_feather('Aug_2021_LineP.feather')
+
 ```
 
 
@@ -63,6 +68,10 @@ Predictions_Spring_8D_2021 <- as.data.frame(Predictions_Spring_8D_2021)  # Creat
 Predictions_Summer_8D_2021 <- predict(model1, df_Summer_8D_2021, type = "response")
 Predictions_Summer_8D_2021 <- as.data.frame(Predictions_Summer_8D_2021)  # Create a data frame of predictions
 
+# Spring 8D 2019
+Predictions_Spring_8D_2019 <- predict(model1, df_Summer_8D_2021, type = "response")
+Predictions_Spring_8D_2019  <- as.data.frame(Predictions_Summer_8D_2021)  # Create a data frame of predictions
+
 ```
 
 
@@ -71,6 +80,7 @@ Predictions_Summer_8D_2021 <- as.data.frame(Predictions_Summer_8D_2021)  # Creat
 
 feather::write_feather(Predictions_Spring_8D_2021, 'May_June_2021_Predictions.feather')
 feather::write_feather(Predictions_Summer_8D_2021, 'Aug_Sept_2021_Predictions.feather')
+feather::write_feather(Predictions_Spring_8D_2019, 'June_2019_Predictions.feather')
 
 ```
 
