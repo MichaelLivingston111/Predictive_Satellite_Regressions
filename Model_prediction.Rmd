@@ -32,7 +32,9 @@ total_data <- read.csv("Total_Sat_Data_All_Var.csv")
 UpperMixed_data <- total_data %>% select(TEP, Log_Chl, Temperature, Log_MLD, MLD, Season, POC)
 
 # Create the model:
-model1 <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)
+model <- lmer(TEP ~ Log_Chl + Temperature + (1|Season), data = UpperMixed_data)  # Basic model, not used
+model1 <- lmer(TEP ~ Log_Chl + Temperature + POC + (1|Season), data = UpperMixed_data)  # Applied model
+
 
 # Examine the model summary and R2:
 summary(model1)
@@ -44,14 +46,39 @@ r.squaredGLMM(model1)
 # Load the required satellite data: Already cleaned and sorted:
 ```{r}
 
-# 8 day spring 2021
+# 8 day spring 2021 LineP:
 df_Spring_8D_2021 <- arrow::read_feather('May_2021_LineP.feather')
 
-# 8 day summer 2021
+# 8 day summer 2021 LineP:
 df_Summer_8D_2021 <- arrow::read_feather('Aug_2021_LineP.feather')
 
-# 8 day spring 2019
-df_Spring_8D_2019 <- arrow::read_feather('Aug_2021_LineP.feather')
+# 8 day spring 2019 LineP:
+df_Spring_8D_2019 <- arrow::read_feather('June_2019_LineP.feather')
+
+# 8 day spring 2019 LaPer:
+df_Spring_8D_LaPer_2019 <- arrow::read_feather('May_2019_LaPer.feather')
+
+# 8 day summer 2019 LineP:
+df_Summer_8D_2019 <- arrow::read_feather('Aug_2019_LineP.feather')
+
+# 8 day summer 2019 LaPer:
+df_Summer_8D_LaPer_2019 <- arrow::read_feather('Sept_2019_LaPer.feather')
+
+# 8 day summer 2019 LineP:
+df_Winter_8D_2020 <- arrow::read_feather('Feb_2020_LineP.feather')
+
+
+
+# Single day predictions/validations:
+
+# Single day P4 spring 2019:
+df_P4_Spring_2019 <- arrow::read_feather('June_2019_P4_day_LineP.feather')
+
+# Single day B7 spring 2019:
+df_B7_Spring_2019 <- arrow::read_feather('May_2019_B7_day_LineP.feather')
+
+# Single day LB line summer 2019:
+df_LB_Summer_2019 <- arrow::read_feather('2019_LBLine_DAY.feather')
 
 ```
 
@@ -62,15 +89,63 @@ df_Spring_8D_2019 <- arrow::read_feather('Aug_2021_LineP.feather')
 # Spring 8D 2021
 Predictions_Spring_8D_2021 <- predict(model1, df_Spring_8D_2021, type = "response")
 Predictions_Spring_8D_2021 <- as.data.frame(Predictions_Spring_8D_2021)  # Create a data frame of predictions
+Predictions_Spring_8D_2021$POC <- df_Spring_8D_2021$POC  # Add POC to the prediction data frame
 
 
 # Summer 8D 2021
 Predictions_Summer_8D_2021 <- predict(model1, df_Summer_8D_2021, type = "response")
 Predictions_Summer_8D_2021 <- as.data.frame(Predictions_Summer_8D_2021)  # Create a data frame of predictions
+Predictions_Summer_8D_2021$POC <- df_Summer_8D_2021$POC  # Add POC to the prediction data frame
+
 
 # Spring 8D 2019
-Predictions_Spring_8D_2019 <- predict(model1, df_Summer_8D_2021, type = "response")
-Predictions_Spring_8D_2019  <- as.data.frame(Predictions_Summer_8D_2021)  # Create a data frame of predictions
+Predictions_Spring_8D_2019 <- predict(model1, df_Spring_8D_2019, type = "response")
+Predictions_Spring_8D_2019  <- as.data.frame(Predictions_Spring_8D_2019)  # Create a data frame of predictions
+Predictions_Spring_8D_2019$POC <- df_Spring_8D_2019$POC  # Add POC to the prediction data frame
+
+
+# Spring 8D 2019 LaPer
+Predictions_Spring_8D_LaPer_2019 <- predict(model1, df_Spring_8D_LaPer_2019, type = "response")
+Predictions_Spring_8D_LaPer_2019  <- as.data.frame(Predictions_Spring_8D_LaPer_2019)  # Create a data frame of predictions
+Predictions_Spring_8D_LaPer_2019$POC <- df_Spring_8D_LaPer_2019$POC  # Add POC to the prediction data frame
+
+
+# Summer 8D 2019
+Predictions_Summer_8D_2019 <- predict(model1, df_Summer_8D_2019, type = "response")
+Predictions_Summer_8D_2019  <- as.data.frame(Predictions_Summer_8D_2019)  # Create a data frame of predictions
+Predictions_Summer_8D_2019$POC <- df_Summer_8D_2019$POC  # Add POC to the prediction data frame
+
+
+# Summer 8D 2019 LaPer
+Predictions_Summer_8D_LaPer_2019 <- predict(model1, df_Summer_8D_LaPer_2019, type = "response")
+Predictions_Summer_8D_LaPer_2019  <- as.data.frame(Predictions_Summer_8D_LaPer_2019)  # Create a data frame of predictions
+Predictions_Summer_8D_LaPer_2019$POC <- df_Summer_8D_LaPer_2019$POC  # Add POC to the prediction data frame
+
+
+# Winter 8D 2020
+Predictions_Winter_8D_2020 <- predict(model1, df_Winter_8D_2020, type = "response")
+Predictions_Winter_8D_2020  <- as.data.frame(Predictions_Winter_8D_2020)  # Create a data frame of predictions
+Predictions_Winter_8D_2020$POC <- df_Winter_8D_2020$POC  # Add POC to the prediction data frame
+
+
+
+
+# Individual station predictions/validations:
+
+# Spring 1D 2019 P4
+Predictions_Spring_P4_2019 <- predict(model1, df_P4_Spring_2019, type = "response")
+Predictions_Spring_P4_2019  <- as.data.frame(Predictions_Spring_P4_2019)  # Create a data frame of predictions
+Predictions_Spring_P4_2019$POC <- df_P4_Spring_2019$POC  # Add POC to the prediction data frame
+
+# Spring 1D 2019 B7
+Predictions_Spring_B7_2019 <- predict(model1, df_B7_Spring_2019, type = "response")
+Predictions_Spring_B7_2019  <- as.data.frame(Predictions_Spring_B7_2019)  # Create a data frame of predictions
+
+# 2019 summer LB line
+Predictions_Summer_LB_2019 <- predict(model1, df_LB_Summer_2019, type = "response")
+Predictions_Summer_LB_2019  <- as.data.frame(Predictions_Summer_LB_2019)  # Create a data frame of predictions
+Predictions_Summer_LB_2019$POC <- df_LB_Summer_2019$POC  # Add POC to the prediction data frame
+
 
 ```
 
@@ -81,6 +156,13 @@ Predictions_Spring_8D_2019  <- as.data.frame(Predictions_Summer_8D_2021)  # Crea
 feather::write_feather(Predictions_Spring_8D_2021, 'May_June_2021_Predictions.feather')
 feather::write_feather(Predictions_Summer_8D_2021, 'Aug_Sept_2021_Predictions.feather')
 feather::write_feather(Predictions_Spring_8D_2019, 'June_2019_Predictions.feather')
+feather::write_feather(Predictions_Spring_P4_2019, 'June_2019_P4_Predictions.feather')
+feather::write_feather(Predictions_Spring_B7_2019, 'May_2019_B7_Predictions.feather')
+feather::write_feather(Predictions_Summer_8D_2019, 'Aug_2019_Predictions.feather')
+feather::write_feather(Predictions_Spring_8D_LaPer_2019, 'May_2019_LaPer_Predictions.feather')
+feather::write_feather(Predictions_Summer_8D_LaPer_2019, 'Sept_2019_LaPer_Predictions.feather')
+feather::write_feather(Predictions_Winter_8D_2020, 'Feb_2020_LineP_Predictions.feather')
+feather::write_feather(Predictions_Summer_LB_2019, 'Summer_2019_LBLine_Predictions.feather')
 
 ```
 
