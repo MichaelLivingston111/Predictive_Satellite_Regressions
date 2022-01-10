@@ -431,8 +431,7 @@ backward_lm <- ggplot(predictions, aes(x = sample_train, y = backward_selection_
 backward_lmer <- ggplot(predictions, aes(x = sample_train, y = backward_selection_lmer_predict)) +
     geom_point(alpha = 0.6, colour = "black") +
     geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
-    ggtitle("2B: Chl (log) + Temperature + DO + POC + PAR + 
-    Density + (1|Season)") +
+    ggtitle("(A) Chl + Temperature + DO + POC + PAR + Density + (1|Season)") +
     ylim(0, 200) +
     xlim(0, 200) +
     ylab("") +
@@ -455,7 +454,7 @@ sat_lm <- ggplot(predictions, aes(x = sample_train, y = sat_lm_predict)) +
 sat_lmer <- ggplot(predictions, aes(x = sample_train, y = sat_lmer_predict)) +
     geom_point(alpha = 0.6, colour = "black") +
     geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
-    ggtitle("3B: Chl (log) + Temperature + POC + (1|Season)") +
+    ggtitle("(B) Chl + Temperature + POC + (1|Season)") +
     ylim(0, 200) +
     xlim(0, 200) +
     ylab("") +
@@ -515,19 +514,23 @@ dev.off()
 # Plots:
 ```{r}
 
-Figure2 <- ggarrange(backward_lmer, sat_lmer, nrow = 1, ncol = 3)
+Figure2 <- ggarrange(backward_lmer, sat_lmer, nrow = 1, ncol = 2)
 
-Figure2
-
-pdf(file = "/Users/michaellivingston/Desktop/Cross_validations2.pdf",   # The directory you want to save the file in
-    width = 12, # The width of the plot in inches
-    height = 8) # The height of the plot in inches
-
-annotate_figure(Figure2, 
+Figure2 <- annotate_figure(Figure2, 
                 bottom = textGrob("Measured TEP ", gp = gpar(cex = 1)),
                 left = textGrob("Predicted TEP ", gp = gpar(cex = 1), rot = 90))
 
+
+
+pdf(file = "/Users/michaellivingston/Desktop/Cross_validations2.pdf",   # The directory you want to save the file in
+    width = 10, # The width of the plot in inches
+    height = 5) # The height of the plot in inches
+
+Figure2
+
+
 dev.off()
+
 ```
 
 
