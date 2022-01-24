@@ -1,0 +1,93 @@
+---
+title: "Model_Comparisons"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+# In the previous files on this repoository, I created three sets of models to estimate exopolymer concentrations from different combinations of vairables based on the availability of the data and the practical considerations for each model. These included:
+
+  A) An 'optimal feature' model, which aims to create the best possible model on all features reported. This type of model is limited in use, beacuse it relies on a large number of features to be reported. As such, it is only relevant in theory, or in large databases that may report all the features.
+  
+  B) A 'Satellite sensor' model. This model can be veru useful as it was built specifically using features reported by satellites, including temperature, chlorophyll, POC and time of year. While not quite as accurate as the optimal feature model, it is still quite accurate.
+  
+  C) A 'remote sensor' model, which is designed using features reported from mobile remote sensors, such as on CTDs. 
+  
+
+
+
+
+# Upload required libraries:
+```{r}
+
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+suppressMessages(library(ggpubr))
+suppressMessages(library(MuMIn))
+suppressMessages(library(lme4))
+suppressMessages(library(feather))
+suppressMessages(library(arrow))
+suppressMessages(library(dplyr))
+suppressMessages(library(viridis))
+suppressMessages(library(grid))
+suppressMessages(library(car))
+suppressMessages(library(jtools))
+suppressMessages(library(broom.mixed))
+
+```
+
+
+# Upload all the data, and sort into workable dataframes:
+```{r}
+
+# Upload the data from a total data file:
+total_data <- read.csv("Total_Sat_Data_All_Var.csv")
+total_data2 <- read.csv("Remote_Sensor_model.csv")
+
+# Specify all the relevant variables (requires 2 different datasets):
+data <- total_data %>% select(TEP, Temperature, Season, Log_Chl, POC, Avg_PAR)
+remote_data <- total_data2 %>% select(TEP, Temperature, DO, Log_MLD, Season, Log_Fluor, Sigma)
+
+```
+
+
+# Create all the models of interest. All model assumptions have already been checked, and their accuracies determined with cross validation techniques. More detail on these models in their respective files:
+```{r}
+
+# Optimal feature model:
+feature_lmer = lmer(TEP ~ Log_Chl + Temperature + DO + Log_MLD + Avg_PAR + Nitrate + (1|Season), data = total_data)
+
+
+# Satellite sensor models:
+satellite_lmer = lmer(TEP ~ Temperature + Log_Chl + POC + (1|Season), data = total_data)
+
+
+# Remote sensor models:
+remote_lmer = lmer(TEP ~ Temperature + DO + Log_MLD + Log_Fluor + Sigma + (1|Season), data = total_data2)
+
+
+```
+
+
+# Compare the relaitve strengths of each feature/coefficient from each model:
+```{r}
+
+plot_coefs(feature_lmer, satellite_lmer, remote_lmer, scale = TRUE)
+
+
+```
+
+
+
+
+
+
+
+
+
+  
