@@ -22,6 +22,7 @@ suppressMessages(library(dplyr))
 suppressMessages(library(viridis))
 suppressMessages(library(grid))
 suppressMessages(library(car))
+suppressMessages(library(GGally))
 
 ```
 
@@ -79,21 +80,28 @@ plot(backward$residuals ~ backward$fitted.values)
 
 
 
-# Specify a ideal mixed effects and linear models based on the variable selections above:
+# Specify ideal mixed effects and linear models based on the variable selections above:
 ```{r}
 
-# Ideal satellite model
-Satellite_All_lmer = lmer(TEP ~ Temperature + Log_Chl + POC + Avg_PAR + (1|Season), data = data)
+# Ideal satellite model:
+Satellite_All_lmer = lmer(TEP ~ Temperature + Log_Chl + POC + (1|Season), data = data)
+
 summary(Satellite_All_lmer)
 r.squaredGLMM(Satellite_All_lmer)
 
-# reduced satellite model
-Satellite_lmer = lmer(TEP ~ Temperature + Log_Chl + POC + (1|Season), data = data)
-summary(Satellite_lmer)
-r.squaredGLMM(Satellite_lmer)
 
-Satellite_lm = lm(TEP ~ Temperature + Log_Chl + POC + Avg_PAR, data = data)
+# Linear model:
+Satellite_lm = lm(TEP ~ Temperature + Log_Chl + POC + Season, data = data)
+
 summary(Satellite_lm)
+r.squaredGLMM(Satellite_lm)
+
+
+# Base satellite model:
+Satellite_lm_base = lm(TEP ~ Temperature + Log_Chl + Season, data = data)
+
+summary(Satellite_lm_base)
+r.squaredGLMM(Satellite_lm_base)
 
 ```
 
@@ -102,8 +110,8 @@ summary(Satellite_lm)
 ```{r}
 
 car::vif(Satellite_All_lmer)
-car::vif(Satellite_lmer)
 car::vif(Satellite_lm)
+car::vif(Satellite_lm_base)
 
 # No concerns about multicollinearity....
 
@@ -113,10 +121,10 @@ car::vif(Satellite_lm)
 # What model is prefferred? Check AIC and AICc:
 ```{r}
 
-AIC(Satellite_All_lmer, Satellite_lmer, Satellite_lm)
-AICc(Satellite_All_lmer, Satellite_lmer, Satellite_lm)
+AIC(Satellite_All_lmer, Satellite_lm, Satellite_lm_base)
+AICc(Satellite_All_lmer, Satellite_lm, Satellite_lm_base)
 
-# The mixed effects models is clearly preferred. However, the addition of PAR does not increase the accuracy of this model and should therefore not be considered.
+# The mixed effects models is clearly preferred. 
 
 ```
 
@@ -124,16 +132,29 @@ AICc(Satellite_All_lmer, Satellite_lmer, Satellite_lm)
 # Checking model assumptions: Equal variance and normal distribution of model residuals:
 ```{r}
 
-# Get the linear model residuals:
+
+# Get the model residuals:
 data$resid1 <- resid(Satellite_lmer)  
 data$predict1 <- predict(Satellite_lmer) 
 
 data$resid2 <- resid(Satellite_lm)  
 data$predict2 <- predict(Satellite_lm) 
 
+data$resid3 <- resid(Satellite_lmer_base)  
+data$predict3 <- predict(Satellite_lm_base) 
+
+
+
+
 # Residual, Q-Q, Cooks distance plots:
 plot(Satellite_lmer)  # Residuals
 plot(Satellite_lm)
+plot(Satellite_lmer_base)
+
+# QQ plots:
+Q_1 <- qqPlot(data$predict1, pch = 1)
+Q_2 <- qqPlot(data$predict2, pch = 1)
+Q_3 <- qqPlot(data$predict3, pch = 1)
 
 # Plot the distribution of the linear model residuals:
 H_model1 <- ggplot(data = data, aes(resid1)) + 
@@ -148,15 +169,22 @@ H_model2 <- ggplot(data = data, aes(resid2)) +
   ylab("Count") +
   theme_pubr()
 
-ggarrange(H_model1, H_model2)
+H_model3 <- ggplot(data = data, aes(resid3)) + 
+  geom_histogram(binwidth = 0.5, colour = "black", fill = "white") +
+  xlab("Residuals") +
+  ylab("Count") +
+  theme_pubr()
+
+
+ggarrange(H_model1, H_model2, H_model3)
+
+
 
 
 # Use the Shapiro-Wilks test to test for normality distributions in the residuals:
 shapiro.test(data$resid1) 
 shapiro.test(data$resid2) 
-
-summary(Satellite_lmer)
-summary(Satellite_lm)
+shapiro.test(data$resid3) 
 
 ```
 
@@ -177,11 +205,15 @@ Sat_lm_predict <- NULL
 Sat_lm_RMSE <- NULL
 Sat_lm_MAE <- NULL
 
+Sat_lm_base_predict <- NULL
+Sat_lm_base_RMSE <- NULL
+Sat_lm_base_MAE <- NULL
+
 
 # Loop through model prediction and perform 25x cross validation. 
 # The model is trained on 95% of the data, and validated on the other 5%
 
-for (i in 1:25) {
+for (i in 1:30) {
   
   #Creating a re-sampled data set from the total data:
   training.samples <- createDataPartition(data$TEP, p = 0.95, list = FALSE)
@@ -191,12 +223,14 @@ for (i in 1:25) {
   
   # Running the models and creating predictions, accuracy metrics on the partitioned training data:
   
-  # Remote mixed effects:
+  # Mixed effects:
   Sat_lmer_CV<- lmer(TEP ~ Log_Chl + Temperature + POC + (1|Season), data = train.data1) 
 
-  
-  # Remote linear model:
+  # Linear model:
   Sat_lm_CV<- lm(TEP ~ Log_Chl + Temperature + POC, data = train.data1) 
+  
+  # Base model:
+  Sat_lm_base_CV<- lm(TEP ~ Log_Chl + Temperature + Season, data = train.data1) 
   
   
   # Model 'true' training points, applies to each model:
@@ -222,12 +256,21 @@ for (i in 1:25) {
   Sat_lm_RMSE <- c(Sat_lm_RMSE, RMSE(Sat_lm_predict, sample_train))  # RMSE
   
   Sat_lm_MAE <- c(Sat_lm_MAE, MAE(Sat_lm_predict, sample_train))  # RMSE
+  
+  
+  # Base model:
+  Sat_lm_base_predict <- c(Sat_lm_base_predict, predict(Sat_lm_base_CV, test.data1, 
+                                                type = "response", allow.new.levels = TRUE))  # Predictions
+  
+  Sat_lm_base_RMSE <- c(Sat_lm_base_RMSE, RMSE(Sat_lm_base_predict, sample_train))  # RMSE
+  
+  Sat_lm_base_MAE <- c(Sat_lm_base_MAE, MAE(Sat_lm_base_predict, sample_train))  # RMSE
 }
 
 
 # The above loop generated 25 different regression models with model coefficients, y intercepts and predictions, specified below for each of the models created: 
 
-predictions <- cbind(remote_lmer_predict, remote_lm_predict)
+predictions <- cbind(Sat_lmer_predict, Sat_lm_predict, Sat_lm_base_predict)
 predictions <- as.data.frame(predictions)  # as a data frame
 
 ```
@@ -236,8 +279,10 @@ predictions <- as.data.frame(predictions)  # as a data frame
 # Plot the results of the cross validation:
 ```{r}
 
-Sat_lmer_plot <- ggplot(predictions, aes(x = sample_train, y = Sat_lmer_predict)) +
-    geom_point(alpha = 0.6, colour = "black") +
+Figure <- ggplot(predictions, aes(x = sample_train)) +
+    #geom_point(aes(y = Sat_lmer_predict), alpha = 0.6, colour = "blue") +
+    geom_point(aes(y = Sat_lm_predict), alpha = 0.6, colour = "dodgerblue") +
+    #geom_point(aes(y = Sat_lm_base_predict), alpha = 0.6, colour = "black") +
     geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
     ggtitle("") +
     ylim(0, 175) +
@@ -247,42 +292,27 @@ Sat_lmer_plot <- ggplot(predictions, aes(x = sample_train, y = Sat_lmer_predict)
     theme_pubr() +
     theme(plot.title=element_text(size=8,face="bold"))
 
-Sat_lm_plot <- ggplot(predictions, aes(x = sample_train, y = Sat_lm_predict)) +
-    geom_point(alpha = 0.6, colour = "black") +
-    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
-    ggtitle("") +
-    ylim(0, 175) +
-    xlim(0, 175) +
-    ylab("") +
-    xlab("") +
-    theme_pubr() +
-    theme(plot.title=element_text(size=8,face="bold"))
-
-Figure <- ggarrange(Sat_lmer_plot, Sat_lm_plot)
 
 Figure
-
 
 ```
 
 
-# Print the mean aboslute errors and root mean square errors for both models:
+# Compare all the model accuracies with mean absolutew errors:
 ```{r}
 
-# Create data frames for the accuracy measurements:
-RMSE <- cbind(Sat_lmer_RMSE, Sat_lm_RMSE)
-RMSE <- as.data.frame(RMSE)
 
-MAE <- cbind(Sat_lmer_MAE, Sat_lm_MAE)
+# Get the MAE:
+MAE <- cbind(Sat_lmer_MAE, Sat_lm_MAE, Sat_lm_base_MAE)
 MAE <- as.data.frame(MAE)
 
-mean_total <- mean(data$TEP)  # Calculate mean of true values
-
-# Get the average MAE and RMSE for each model:
 MAE <- colMeans(MAE)
-RMSE <- colMeans(RMSE)
-
 print(MAE)
-print(RMSE)
 
+MAE_boxplot <- boxplot(Sat_lmer_MAE, Sat_lm_MAE, Sat_lm_base_MAE, main='MAE',
+        names=c('Mixed effects','Linear', 'Base Linear'), 
+        outline=FALSE, ylim=c(7,15))
+
+
+# glmnet
 ```
