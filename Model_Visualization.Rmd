@@ -38,6 +38,7 @@ suppressMessages(library(grid))
 suppressMessages(library(car))
 suppressMessages(library(jtools))
 suppressMessages(library(cowplot))
+suppressMessages(library(reshape2))
 
 ```
 
@@ -49,7 +50,7 @@ suppressMessages(library(cowplot))
 total_data <- read.csv("Total_Sat_Data_All_Var.csv")
 total_data2 <- read.csv("Remote_Sensor_model.csv")
 
-# Specify all the relevant variables (requires 2 different datasets):
+# Specify all the relevant variables (requires 2 different data sets):
 remote_data <- total_data2 %>% select(TEP, Temperature, DO, Log_MLD, Season, Log_Fluor, Sigma)
 
 ```
@@ -59,26 +60,19 @@ remote_data <- total_data2 %>% select(TEP, Temperature, DO, Log_MLD, Season, Log
 ```{r}
 
 # Optimal feature model:
-feature_lmer <-  lmer(TEP ~ Log_Chl + Temperature + DO + Log_MLD + Avg_PAR + Nitrate + (1|Season), data = total_data)
+feature_lmer <-  lmer(TEP ~ Log_Chl + Temperature + DO + Log_MLD + Avg_PAR + Sigma + (1|Season), data = total_data)
 r.squaredGLMM(feature_lmer)
 
 # Satellite sensor models:
-satellite_lmer <- lmer(TEP ~ Temperature + Log_Chl + POC + (1|Season), data = total_data)
-r.squaredGLMM(satellite_lmer)
+satellite_lm <- lm(TEP ~ Log_Chl + POC + Temperature + Season, data = total_data)
+r.squaredGLMM(satellite_lm)
 
 # Remote sensor models:
-remote_lmer <-  lmer(TEP ~ Temperature + DO + Log_MLD + Log_Fluor + Sigma + (1|Season), data = total_data2)
-r.squaredGLMM(remote_lmer)
+remote_lm <-  lm(TEP ~ Temperature + DO + Log_MLD + Log_Fluor + Sigma, data = total_data2)
+r.squaredGLMM(remote_lm)
 
 ```
 
-
-# Compare the relaitve strengths of each feature/coefficient from each model:
-```{r}
-
-plot_coefs(feature_lmer, satellite_lmer, remote_lmer, scale = TRUE)
-
-```
 
 # Calculate residuals for each model, make plots of residual distributions and residuals vs fitted:
 ```{r}
@@ -88,12 +82,12 @@ total_data$feature_resid <-  resid(feature_lmer)
 total_data$feature_fit <-  predict(feature_lmer)
 
 # Satellite sensor models:
-total_data$satellite_resid <-  resid(satellite_lmer)
-total_data$satellite_fit <-  predict(satellite_lmer)
+total_data$satellite_resid <-  resid(satellite_lm)
+total_data$satellite_fit <-  predict(satellite_lm)
 
 # Remote sensor models:
-total_data2$remote_resid <-  resid(remote_lmer)
-total_data2$remote_fit <-  predict(remote_lmer)
+total_data2$remote_resid <-  resid(remote_lm)
+total_data2$remote_fit <-  predict(remote_lm)
 
 
 # Residual distribution plot (histogram):
@@ -153,6 +147,25 @@ Figure
 
 ```
 
+# Check model assumptions:
+```{r}
+
+# Multicollinearity?
+car::vif(feature_lmer)
+car::vif(satellite_lm)
+car::vif(remote_lm)
+
+
+# Normality in residual distribution?
+shapiro.test(resid(feature_lmer)) 
+shapiro.test(resid(satellite_lm))
+shapiro.test(resid(remote_lm)) 
+
+```
+
+
+
+
 # Perfrom a 25x cross validation to assess the accuracy of these models on new data. 
 ```{r}
 
@@ -166,19 +179,19 @@ feature_lmer_predict <- NULL
 feature_lmer_RMSE <- NULL
 feature_lmer_MAE <- NULL
 
-satellite_lmer_predict <- NULL
-satellite_lmer_RMSE <- NULL
-satellite_lmer_MAE <- NULL
+satellite_lm_predict <- NULL
+satellite_lm_RMSE <- NULL
+satellite_lm_MAE <- NULL
 
-remote_lmer_predict <- NULL
-remote_lmer_RMSE <- NULL
-remote_lmer_MAE <- NULL
+remote_lm_predict <- NULL
+remote_lm_RMSE <- NULL
+remote_lm_MAE <- NULL
 
 
 # Loop through model prediction and perform 25x cross validation. 
 # The model is trained on 95% of the data, and validated on the other 5%
 
-for (i in 1:25) {
+for (i in 1:30) {
   
   #Creating a re-sampled data set from the total data:
   training.samples <- createDataPartition(total_data$TEP, p = 0.95, list = FALSE)
@@ -194,14 +207,14 @@ for (i in 1:25) {
   # Running the models and creating predictions, accuracy metrics on the partitioned training data:
   
   # Feature:
-  feature_lmer_CV<- lmer(TEP ~ Log_Chl + Temperature + DO + Log_MLD + Avg_PAR + Nitrate + (1|Season), data = train.data1) 
+  feature_lmer_CV<- lmer(TEP ~ Log_Chl + Temperature + DO + Log_MLD + Avg_PAR + Sigma + (1|Season), data = train.data1) 
 
   
   # Satellite:
-  satellite_lmer_CV<- lmer(TEP ~ Temperature + Log_Chl + POC + (1|Season), data = train.data1) 
+  satellite_lm_CV<- lm(TEP ~ Temperature + Log_Chl + POC + Season, data = train.data1) 
   
   # Remote:
-  remote_lmer_CV <-  lmer(TEP ~ Temperature + DO + Log_MLD + Log_Fluor + Sigma + (1|Season), data = train.data2)
+  remote_lm_CV <-  lm(TEP ~ Temperature + DO + Log_MLD + Log_Fluor + Sigma + Season, data = train.data2)
   
   
   # Model 'true' training points, applies to each model:
@@ -222,21 +235,21 @@ for (i in 1:25) {
   
 
   # Satellite:
-  satellite_lmer_predict <- c(satellite_lmer_predict, predict(satellite_lmer_CV, test.data1, 
+  satellite_lm_predict <- c(satellite_lm_predict, predict(satellite_lm_CV, test.data1, 
                                                 type = "response", allow.new.levels = TRUE))  # Predictions
   
-  satellite_lmer_RMSE <- c(satellite_lmer_RMSE, RMSE(satellite_lmer_predict, sample_train))  # RMSE
+  satellite_lm_RMSE <- c(satellite_lm_RMSE, RMSE(satellite_lm_predict, sample_train))  # RMSE
   
-  satellite_lmer_MAE <- c(satellite_lmer_MAE, MAE(satellite_lmer_predict, sample_train))  # RMSE
+  satellite_lm_MAE <- c(satellite_lm_MAE, MAE(satellite_lm_predict, sample_train))  # RMSE
   
   
   # Remote:
-  remote_lmer_predict <- c(remote_lmer_predict, predict(remote_lmer_CV, test.data2, 
+  remote_lm_predict <- c(remote_lm_predict, predict(remote_lm_CV, test.data2, 
                                                 type = "response", allow.new.levels = TRUE))  # Predictions
   
-  remote_lmer_RMSE <- c(remote_lmer_RMSE, RMSE(remote_lmer_predict, sample_train2))  # RMSE
+  remote_lm_RMSE <- c(remote_lm_RMSE, RMSE(remote_lm_predict, sample_train2))  # RMSE
   
-  remote_lmer_MAE <- c(remote_lmer_MAE, MAE(remote_lmer_predict, sample_train2))  # RMSE
+  remote_lm_MAE <- c(remote_lm_MAE, MAE(remote_lm_predict, sample_train2))  # RMSE
   
   
 }
@@ -244,7 +257,7 @@ for (i in 1:25) {
 
 # The above loop generated 25 different regression models with model coefficients, y intercepts and predictions, specified below for each of the models created: 
 
-predictions <- cbind(feature_lmer_predict, satellite_lmer_predict, remote_lmer_predict, sample_train, sample_train2)
+predictions <- cbind(feature_lmer_predict, satellite_lm_predict, remote_lm_predict, sample_train, sample_train2)
 predictions <- as.data.frame(predictions)  # as a data frame
 
 ```
@@ -256,24 +269,26 @@ predictions <- as.data.frame(predictions)  # as a data frame
 CV_plot <- ggplot(predictions, aes()) +
   
   # Feature:
-    geom_point(aes(x = sample_train, y = feature_lmer_predict), 
-               alpha = 0.6, colour = "black") +  
+    #geom_point(aes(x = sample_train, y = feature_lmer_predict), 
+               #alpha = 1, colour = "black") +  
   
   # Satellite:
-    geom_point(aes(x = sample_train, y = satellite_lmer_predict), 
-               alpha = 0.6, colour = "blue") +
+    geom_point(aes(x = sample_train, y = satellite_lm_predict), 
+               alpha = 1, colour = "slateblue") +
+    geom_smooth(aes(x = sample_train, y = satellite_lm_predict), method = 'lm') +
   
   # Remote:
-    geom_point(aes(x = sample_train2, y = remote_lmer_predict), 
-               alpha = 0.9, pch = 21) +
+    #geom_point(aes(x = sample_train2, y = remote_lm_predict), 
+               #alpha = 1, colour = "darkgray") +
   
     geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
     ggtitle("") +
     ylim(0, 175) +
     xlim(0, 175) +
-    ylab("Predicted TEP (ug/L)") +
-    xlab("Measured TEP (ug/L)") +
+    ylab("Predicted TEP") +
+    xlab("Measured TEP") +
     theme_pubr() +
+    labs(title = "Satellite model", tag = "A")
     theme(plot.title=element_text(size=8,face="bold"))
 
 CV_plot
@@ -285,18 +300,58 @@ CV_plot
 ```{r}
 
 
+
+
 # Get the MAE:
-MAE <- cbind(feature_lmer_MAE, satellite_lmer_MAE, remote_lmer_MAE)
-MAE <- as.data.frame(MAE)
-
-boxplot(feature_lmer_MAE, satellite_lmer_MAE, remote_lmer_MAE, main='MAE',
-        names=c('Feature model','Satellite model', 'Remote model'), outline=FALSE)
+MAE_df <- cbind(feature_lmer_MAE, satellite_lm_MAE, remote_lm_MAE)
+MAE_df <- as.data.frame(MAE_df)
+colnames(MAE_df) <- c("Feature", "Satellite", "Remote")
 
 
+MAE_dff <- melt(MAE_df,  variable.name = 'MAE')
 
+MAE <- colMeans(MAE_df)
+print(MAE)
+
+
+MAE_box <- ggplot(MAE_dff, aes(x = MAE, y = value)) +
+  geom_boxplot(fill = "slateblue", alpha = 0.3) +
+  ylab("Mean absolute error") +
+  xlab("") +
+  ylim(6, 17) +
+  labs(tag = "B") +
+  theme_pubr()
+
+MAE_box
+
+```
+
+# Print out accuracy figures:
+```{r}
+
+# Specify all coordiantes:
+pdf(file = "/Users/michaellivingston/Desktop/Optimal_accuracy_metrics.pdf",   # The directory you want to save the file in
+    width = 11, # The width of the plot in inches
+    height = 7) # The height of the plot in inches
+
+ggarrange(CV_plot, MAE_box)
+
+dev.off()
 
 
 ```
+
+
+
+# Compare the relaitve strengths of each feature/coefficient from each model:
+```{r}
+
+plot_coefs(feature_lmer, satellite_lm, remote_lm, scale = TRUE,
+           model.names = c("Feature", "Satellite", "Remote"))
+
+```
+
+
 
 
 
