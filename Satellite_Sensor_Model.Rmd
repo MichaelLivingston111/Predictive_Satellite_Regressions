@@ -72,7 +72,7 @@ plot(backward$residuals ~ backward$fitted.values)
 
 
 
-# Specify ideal mixed effects and linear models based on the variable selections above:
+# Create a series of predictive models based off the informaiton from stepwise selection above:
 ```{r}
 
 # Base model:
@@ -117,14 +117,12 @@ r.squaredGLMM(Satellite_All_lmer)
 ```
 
 
-# May need to eliminate variables to avoid multicollinearity:
+# May need to eliminate variables to avoid multicollinearity. Check for this vby examining the variance inflation factors.
 ```{r}
 
 
 car::vif(model_2)
 car::vif(model_3)
-
-
 car::vif(Satellite_All_lmer)
 car::vif(Satellite_lm)
 
@@ -140,14 +138,13 @@ car::vif(Satellite_lm)
 AIC(Satellite_All_lmer, Satellite_lm, base_model, model_2, model_3)
 AICc(Satellite_All_lmer, Satellite_lm, base_model, model_2, model_3)
 
-# The mixed effects models is clearly preferred. 
+# Linear model 'Satellite lm' is the preffered model based of AIC scores.
 
 ```
 
 
 # Checking model assumptions: Equal variance and normal distribution of model residuals:
 ```{r}
-
 
 # Get the model residuals:
 data$resid1 <- resid(Satellite_All_lmer)  
@@ -168,7 +165,7 @@ data$predict5 <- predict(model_3)
 
 
 
-# Residual, Q-Q, Cooks distance plots:
+# Residual, Cooks distance plots:
 plot(Satellite_All_lmer)  # Residuals
 plot(Satellite_lm)
 plot(base_model)
@@ -182,11 +179,15 @@ Q_2 <- qqPlot(data$predict2, pch = 1)
 Q_3 <- qqPlot(data$predict3, pch = 1)
 Q_4 <- qqPlot(data$predict4, pch = 1)
 Q_5 <- qqPlot(data$predict5, pch = 1)
+
+
+
 ```
 
 
 # Check for normality in the residuals:
 ```{r}
+
 # Plot the distribution of the linear model residuals:
 H_model1 <- ggplot(data = data, aes(resid1)) + 
   geom_histogram(binwidth = 0.5, colour = "black", fill = "white") +
@@ -223,8 +224,6 @@ H_model5 <- ggplot(data = data, aes(resid5)) +
 ggarrange(H_model1, H_model2, H_model3, H_model4, H_model5)
 
 
-
-
 # Use the Shapiro-Wilks test to test for normality distributions in the residuals:
 shapiro.test(data$resid1) 
 shapiro.test(data$resid2) 
@@ -235,7 +234,7 @@ shapiro.test(data$resid5)
 ```
 
 
-# Perfrom a 25x cross validation to assess the accuracy of these models on new data. 
+# Perfrom a 30x cross validation to assess the accuracy of these models on new data. This is done by splitting the data into a 95% training set (in which the model is trained on), and 5% testing set (in which the model is tested on). Repeat this process 30x to cover the entire dataset and determine an estimation of the predictive ability for each model.
 ```{r}
 
 # Containers for the predictions and accuracy measurements:
@@ -349,7 +348,7 @@ for (i in 1:30) {
 }
 
 
-# The above loop generated 25 different regression models with model coefficients, y intercepts and predictions, specified below for each of the models created: 
+# The above loop generated 30 different regression models with model coefficients, y intercepts and predictions, specified below for each of the models created: 
 
 predictions <- cbind(Sat_lmer_predict, Sat_lm_predict, base_predict, model_2_predict, model_3_predict)
 predictions <- as.data.frame(predictions)  # as a data frame
@@ -361,9 +360,7 @@ predictions <- as.data.frame(predictions)  # as a data frame
 ```{r}
 
 Figure <- ggplot(predictions, aes(x = sample_train)) +
-    #geom_point(aes(y = Sat_lmer_predict), alpha = 0.6, colour = "blue") +
     geom_point(aes(y = Sat_lm_predict), alpha = 0.6, colour = "dodgerblue") +
-    #geom_point(aes(y = Sat_lm_base_predict), alpha = 0.6, colour = "black") +
     geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
     ggtitle("") +
     ylim(0, 175) +
@@ -379,7 +376,7 @@ Figure
 ```
 
 
-# Compare all the model accuracies with mean absolutew errors:
+# Compare all the model accuracies using mean absolute errors (MAE). The MAE is essentially the average difference between predicted and true values.
 ```{r, fig.width = 10, fig.height = 6}
 
 
@@ -389,20 +386,13 @@ MAE <- as.data.frame(MAE)
 colnames(MAE) <- c('Chl','Chl + Temperature', 'Chl + Temperature + POC', 
                 'Chl + Temperature + POC + Season', 'Chl + Temperature + POC + (1|Season)')
 
+
+# Reconstruct the dataframe:
 MAE_dff <- melt(MAE,  variable.name = 'MAE')
 
 
-MAE <- colMeans(MAE)
-print(MAE)
 
-MAE_boxplot <- boxplot(base_MAE, model_2_MAE, model_3_MAE, Sat_lm_MAE, Sat_lmer_MAE, main='Mean Absolute Errors',
-        names=c('Chl','Chl + Temperature', 'Chl + Temperature + POC', 
-                'Chl + Temperature + POC + Season', 'Chl + Temperature + POC + (1|Season)'), outline=FALSE) +
-        theme(axis.text.x = element_text(angle = 45, hjust = 0)) +
-        coord_flip()
-
-
-
+# Visualize the model accuracies with a boxplot of MAE values:
 MAE_box <- ggplot(MAE_dff, aes(x = MAE, y = value)) +
   geom_boxplot(fill = "blue", alpha = 0.5) +
   ylab("Mean absolute error") +
@@ -411,66 +401,59 @@ MAE_box <- ggplot(MAE_dff, aes(x = MAE, y = value)) +
   theme_pubr() +
   coord_flip()
 
-MAE_box
 
-
-pdf(file = "/Users/michaellivingston/Desktop/MAE.pdf",   # The directory you want to save the file in
-    width = 11, # The width of the plot in inches
-    height = 7) # The height of the plot in inches
-
-MAE_box
-
-dev.off()
-
-
-# glmnet
 ```
 
 
-# Now lets try predicting independent research expeditions:
+# Now lets try predicting an entire independent research expedition:
 ```{r}
 
-data <- total_data %>% select(TEP, Temperature, Season, Log_Chl, POC, Avg_PAR, SST, Region, Summer_2021_LP, Spring_2021_LP)
+# Reselect the data with an extra group parameter:
+data <- total_data %>% select(TEP, Temperature, Season, Log_Chl, POC, 
+                              Avg_PAR, SST, Region, Summer_2021_LP, Spring_2021_LP)
 
 
+# Split the data into the expedition(s) of interest:
 total_split_summer <- split(data, data$Summer_2021_LP) 
 total_split_spring <- split(data, data$Spring_2021_LP)
 
 
-data_summer_2021 <- total_split_summer$Y  
-data_Else <- total_split_summer$N  
+data_summer_2021 <- total_split_summer$Y  # Summer 2021 expedition
+data_Else <- total_split_summer$N  # All else data
 
 
-data_spring_2021 <- total_split_spring$Y  
-data_Else2 <- total_split_spring$N 
+data_spring_2021 <- total_split_spring$Y  # Spring 2021 expedition
+data_Else2 <- total_split_spring$N  # All else data
 
 
-
+# Create two models to predict each expeditions value with the rest of the dataset:
 Showcase_model_summer <- lm(TEP ~ Log_Chl + Temperature + POC + Season, data = data_Else)
 Showcase_model_spring <- lm(TEP ~ Log_Chl + Temperature + POC + Season, data = data_Else2)
 
 
-data_summer_2021$predict = predict(Showcase_model_summer, data_summer_2021, type = 'response')
+# Make the predictions
+data_summer_2021$predict = predict(Showcase_model_summer, data_summer_2021, type = 'response')  # Summer 2021
 data_Else$predict = predict(Showcase_model_summer, data_Else, type = 'response')
 
 
-data_spring_2021$predict = predict(Showcase_model_spring, data_spring_2021, type = 'response')
+data_spring_2021$predict = predict(Showcase_model_spring, data_spring_2021, type = 'response')  # Spring 2021
 data_Else2$predict = predict(Showcase_model_spring, data_Else, type = 'response')
 
 
+# Name the stations that will be predicted:
 Name = c("P1", "P4", "P12", "P16", "P20", "P26")
 
-# Plot the results:
 
+# Plot the results:
 CV <- ggplot() +
   
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  # 1:1 reference line
   
-  geom_point(aes(x = data_Else$TEP, y = data_Else$predict), colour = 'black', alpha = 0.3) + 
+  geom_point(aes(x = data_Else$TEP, y = data_Else$predict), colour = 'black', alpha = 0.3) +  # Training data
 
-  geom_point(aes(x = data_spring_2021$TEP, data_spring_2021$predict), colour = 'blue', fill = 'blue', shape = 23) +
+  geom_point(aes(x = data_spring_2021$TEP, data_spring_2021$predict), colour = 'blue', fill = 'blue', shape = 23) +  # Test data
   
-  geom_label_repel(aes(x = data_spring_2021$TEP, data_spring_2021$predict, label = Name),
+  geom_label_repel(aes(x = data_spring_2021$TEP, data_spring_2021$predict, label = Name),  # Labels
                   box.padding   = 0.15, 
                   point.padding = 0.15,
                   segment.linetype = 1,
@@ -485,13 +468,9 @@ CV <- ggplot() +
   xlim(0, 160)
   
 
-pdf(file = "/Users/michaellivingston/Desktop/CV.pdf",   # The directory you want to save the file in
-    width = 11, # The width of the plot in inches
-    height = 7) # The height of the plot in inches
 
 CV
 
-dev.off()
 
 
 ```
