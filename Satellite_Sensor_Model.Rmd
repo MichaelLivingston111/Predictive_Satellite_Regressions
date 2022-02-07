@@ -23,6 +23,8 @@ suppressMessages(library(viridis))
 suppressMessages(library(grid))
 suppressMessages(library(car))
 suppressMessages(library(GGally))
+suppressMessages(library(reshape2))
+suppressMessages(library(ggrepel))
 
 ```
 
@@ -34,7 +36,7 @@ suppressMessages(library(GGally))
 total_data <- read.csv("Total_Sat_Data_All_Var.csv")
 
 # Specify all the relevant variables:
-data <- total_data %>% select(TEP, Temperature, Season, Log_Chl, POC, Avg_PAR)
+data <- total_data %>% select(TEP, Temperature, Season, Log_Chl, POC, Avg_PAR, SST, Region)
 
 ```
 
@@ -52,16 +54,6 @@ all_lmer <- lmer(TEP ~ . + (1|Season), data = data)  # mixed effects
 
 ```
 
-
-# Perform forward stepwise regression:
-```{r}
-forward <- step(intercept_only, direction='forward', scope=formula(all), trace=0)
-forward$anova
-forward$coefficients
-
-plot(forward$residuals ~ forward$fitted.values)
-
-```
 
 
 # Perform backward stepwise regression
@@ -83,11 +75,25 @@ plot(backward$residuals ~ backward$fitted.values)
 # Specify ideal mixed effects and linear models based on the variable selections above:
 ```{r}
 
-# Ideal satellite model:
-Satellite_All_lmer = lmer(TEP ~ Temperature + Log_Chl + POC + (1|Season), data = data)
+# Base model:
+base_model = lm(TEP ~ Log_Chl, data = data)
 
-summary(Satellite_All_lmer)
-r.squaredGLMM(Satellite_All_lmer)
+summary(base_model)
+r.squaredGLMM(base_model)
+
+
+# Model 2:
+model_2 = lm(TEP ~ Temperature + Log_Chl, data = data)
+
+summary(model_2)
+r.squaredGLMM(model_2)
+
+
+# Model 3:
+model_3 = lm(TEP ~ Temperature + Log_Chl + POC, data = data)
+
+summary(model_3)
+r.squaredGLMM(model_3)
 
 
 # Linear model:
@@ -97,11 +103,16 @@ summary(Satellite_lm)
 r.squaredGLMM(Satellite_lm)
 
 
-# Base satellite model:
-Satellite_lm_base = lm(TEP ~ Temperature + Log_Chl + Season, data = data)
 
-summary(Satellite_lm_base)
-r.squaredGLMM(Satellite_lm_base)
+# Ideal satellite model:
+Satellite_All_lmer = lmer(TEP ~ Temperature + Log_Chl + POC + (1|Season), data = data)
+
+summary(Satellite_All_lmer)
+r.squaredGLMM(Satellite_All_lmer)
+
+
+
+
 
 ```
 
@@ -109,9 +120,14 @@ r.squaredGLMM(Satellite_lm_base)
 # May need to eliminate variables to avoid multicollinearity:
 ```{r}
 
+
+car::vif(model_2)
+car::vif(model_3)
+
+
 car::vif(Satellite_All_lmer)
 car::vif(Satellite_lm)
-car::vif(Satellite_lm_base)
+
 
 # No concerns about multicollinearity....
 
@@ -121,8 +137,8 @@ car::vif(Satellite_lm_base)
 # What model is prefferred? Check AIC and AICc:
 ```{r}
 
-AIC(Satellite_All_lmer, Satellite_lm, Satellite_lm_base)
-AICc(Satellite_All_lmer, Satellite_lm, Satellite_lm_base)
+AIC(Satellite_All_lmer, Satellite_lm, base_model, model_2, model_3)
+AICc(Satellite_All_lmer, Satellite_lm, base_model, model_2, model_3)
 
 # The mixed effects models is clearly preferred. 
 
@@ -134,28 +150,43 @@ AICc(Satellite_All_lmer, Satellite_lm, Satellite_lm_base)
 
 
 # Get the model residuals:
-data$resid1 <- resid(Satellite_lmer)  
-data$predict1 <- predict(Satellite_lmer) 
+data$resid1 <- resid(Satellite_All_lmer)  
+data$predict1 <- predict(Satellite_All_lmer) 
 
 data$resid2 <- resid(Satellite_lm)  
 data$predict2 <- predict(Satellite_lm) 
 
-data$resid3 <- resid(Satellite_lmer_base)  
-data$predict3 <- predict(Satellite_lm_base) 
+data$resid3 <- resid(base_model)  
+data$predict3 <- predict(base_model) 
+
+data$resid4 <- resid(model_2)  
+data$predict4 <- predict(model_2) 
+
+data$resid5 <- resid(model_3)  
+data$predict5 <- predict(model_3) 
 
 
 
 
 # Residual, Q-Q, Cooks distance plots:
-plot(Satellite_lmer)  # Residuals
+plot(Satellite_All_lmer)  # Residuals
 plot(Satellite_lm)
-plot(Satellite_lmer_base)
+plot(base_model)
+plot(model_2)
+plot(model_3)
+
 
 # QQ plots:
 Q_1 <- qqPlot(data$predict1, pch = 1)
 Q_2 <- qqPlot(data$predict2, pch = 1)
 Q_3 <- qqPlot(data$predict3, pch = 1)
+Q_4 <- qqPlot(data$predict4, pch = 1)
+Q_5 <- qqPlot(data$predict5, pch = 1)
+```
 
+
+# Check for normality in the residuals:
+```{r}
 # Plot the distribution of the linear model residuals:
 H_model1 <- ggplot(data = data, aes(resid1)) + 
   geom_histogram(binwidth = 0.5, colour = "black", fill = "white") +
@@ -175,8 +206,21 @@ H_model3 <- ggplot(data = data, aes(resid3)) +
   ylab("Count") +
   theme_pubr()
 
+H_model4 <- ggplot(data = data, aes(resid4)) + 
+  geom_histogram(binwidth = 0.5, colour = "black", fill = "white") +
+  xlab("Residuals") +
+  ylab("Count") +
+  theme_pubr()
 
-ggarrange(H_model1, H_model2, H_model3)
+H_model5 <- ggplot(data = data, aes(resid5)) + 
+  geom_histogram(binwidth = 0.5, colour = "black", fill = "white") +
+  xlab("Residuals") +
+  ylab("Count") +
+  theme_pubr()
+
+
+
+ggarrange(H_model1, H_model2, H_model3, H_model4, H_model5)
 
 
 
@@ -185,6 +229,8 @@ ggarrange(H_model1, H_model2, H_model3)
 shapiro.test(data$resid1) 
 shapiro.test(data$resid2) 
 shapiro.test(data$resid3) 
+shapiro.test(data$resid4) 
+shapiro.test(data$resid5) 
 
 ```
 
@@ -205,9 +251,17 @@ Sat_lm_predict <- NULL
 Sat_lm_RMSE <- NULL
 Sat_lm_MAE <- NULL
 
-Sat_lm_base_predict <- NULL
-Sat_lm_base_RMSE <- NULL
-Sat_lm_base_MAE <- NULL
+base_predict <- NULL
+base_RMSE <- NULL
+base_MAE <- NULL
+
+model_2_predict <- NULL
+model_2_RMSE <- NULL
+model_2_MAE <- NULL
+
+model_3_predict <- NULL
+model_3_RMSE <- NULL
+model_3_MAE <- NULL
 
 
 # Loop through model prediction and perform 25x cross validation. 
@@ -223,14 +277,20 @@ for (i in 1:30) {
   
   # Running the models and creating predictions, accuracy metrics on the partitioned training data:
   
-  # Mixed effects:
+  # Ideal model::
   Sat_lmer_CV<- lmer(TEP ~ Log_Chl + Temperature + POC + (1|Season), data = train.data1) 
 
   # Linear model:
   Sat_lm_CV<- lm(TEP ~ Log_Chl + Temperature + POC, data = train.data1) 
   
   # Base model:
-  Sat_lm_base_CV<- lm(TEP ~ Log_Chl + Temperature + Season, data = train.data1) 
+  base_CV<- lm(TEP ~ Log_Chl, data = train.data1) 
+  
+  # model 2:
+  model_2_CV<- lm(TEP ~ Log_Chl + Temperature, data = train.data1) 
+  
+  # model 3:
+  model_3_CV<- lm(TEP ~ Log_Chl + Temperature + POC, data = train.data1) 
   
   
   # Model 'true' training points, applies to each model:
@@ -240,7 +300,7 @@ for (i in 1:30) {
   
   # Model predictions and error calculations:
   
-  # Mixed effects:
+  # Ideal model:
   Sat_lmer_predict <- c(Sat_lmer_predict, predict(Sat_lmer_CV, test.data1, 
                                                 type = "response", allow.new.levels = TRUE))  # Predictions
   
@@ -259,18 +319,39 @@ for (i in 1:30) {
   
   
   # Base model:
-  Sat_lm_base_predict <- c(Sat_lm_base_predict, predict(Sat_lm_base_CV, test.data1, 
+  base_predict <- c(base_predict, predict(base_CV, test.data1, 
                                                 type = "response", allow.new.levels = TRUE))  # Predictions
   
-  Sat_lm_base_RMSE <- c(Sat_lm_base_RMSE, RMSE(Sat_lm_base_predict, sample_train))  # RMSE
+  base_RMSE <- c(base_RMSE, RMSE(base_predict, sample_train))  # RMSE
   
-  Sat_lm_base_MAE <- c(Sat_lm_base_MAE, MAE(Sat_lm_base_predict, sample_train))  # RMSE
+  base_MAE <- c(base_MAE, MAE(base_predict, sample_train))  # RMSE
+  
+  
+  # Model 2:
+  model_2_predict <- c(model_2_predict, predict(model_2_CV, test.data1, 
+                                                type = "response", allow.new.levels = TRUE))  # Predictions
+  
+  model_2_RMSE <- c(model_2_RMSE, RMSE(model_2_predict, sample_train))  # RMSE
+  
+  model_2_MAE <- c(model_2_MAE, MAE(model_2_predict, sample_train))  # RMSE
+  
+  
+  # Model 3:
+  model_3_predict <- c(model_3_predict, predict(model_3_CV, test.data1, 
+                                                type = "response", allow.new.levels = TRUE))  # Predictions
+  
+  model_3_RMSE <- c(model_3_RMSE, RMSE(model_3_predict, sample_train))  # RMSE
+  
+  model_3_MAE <- c(model_3_MAE, MAE(model_3_predict, sample_train))  # RMSE
+  
+  
+  
 }
 
 
 # The above loop generated 25 different regression models with model coefficients, y intercepts and predictions, specified below for each of the models created: 
 
-predictions <- cbind(Sat_lmer_predict, Sat_lm_predict, Sat_lm_base_predict)
+predictions <- cbind(Sat_lmer_predict, Sat_lm_predict, base_predict, model_2_predict, model_3_predict)
 predictions <- as.data.frame(predictions)  # as a data frame
 
 ```
@@ -299,20 +380,124 @@ Figure
 
 
 # Compare all the model accuracies with mean absolutew errors:
-```{r}
+```{r, fig.width = 10, fig.height = 6}
 
 
 # Get the MAE:
-MAE <- cbind(Sat_lmer_MAE, Sat_lm_MAE, Sat_lm_base_MAE)
+MAE <- cbind(base_MAE, model_2_MAE, model_3_MAE, Sat_lm_MAE, Sat_lmer_MAE)
 MAE <- as.data.frame(MAE)
+colnames(MAE) <- c('Chl','Chl + Temperature', 'Chl + Temperature + POC', 
+                'Chl + Temperature + POC + Season', 'Chl + Temperature + POC + (1|Season)')
+
+MAE_dff <- melt(MAE,  variable.name = 'MAE')
+
 
 MAE <- colMeans(MAE)
 print(MAE)
 
-MAE_boxplot <- boxplot(Sat_lmer_MAE, Sat_lm_MAE, Sat_lm_base_MAE, main='MAE',
-        names=c('Mixed effects','Linear', 'Base Linear'), 
-        outline=FALSE, ylim=c(7,15))
+MAE_boxplot <- boxplot(base_MAE, model_2_MAE, model_3_MAE, Sat_lm_MAE, Sat_lmer_MAE, main='Mean Absolute Errors',
+        names=c('Chl','Chl + Temperature', 'Chl + Temperature + POC', 
+                'Chl + Temperature + POC + Season', 'Chl + Temperature + POC + (1|Season)'), outline=FALSE) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 0)) +
+        coord_flip()
+
+
+
+MAE_box <- ggplot(MAE_dff, aes(x = MAE, y = value)) +
+  geom_boxplot(fill = "blue", alpha = 0.5) +
+  ylab("Mean absolute error") +
+  xlab("") +
+  ylim(8, 17) +
+  theme_pubr() +
+  coord_flip()
+
+MAE_box
+
+
+pdf(file = "/Users/michaellivingston/Desktop/MAE.pdf",   # The directory you want to save the file in
+    width = 11, # The width of the plot in inches
+    height = 7) # The height of the plot in inches
+
+MAE_box
+
+dev.off()
 
 
 # glmnet
 ```
+
+
+# Now lets try predicting independent research expeditions:
+```{r}
+
+data <- total_data %>% select(TEP, Temperature, Season, Log_Chl, POC, Avg_PAR, SST, Region, Summer_2021_LP, Spring_2021_LP)
+
+
+total_split_summer <- split(data, data$Summer_2021_LP) 
+total_split_spring <- split(data, data$Spring_2021_LP)
+
+
+data_summer_2021 <- total_split_summer$Y  
+data_Else <- total_split_summer$N  
+
+
+data_spring_2021 <- total_split_spring$Y  
+data_Else2 <- total_split_spring$N 
+
+
+
+Showcase_model_summer <- lm(TEP ~ Log_Chl + Temperature + POC + Season, data = data_Else)
+Showcase_model_spring <- lm(TEP ~ Log_Chl + Temperature + POC + Season, data = data_Else2)
+
+
+data_summer_2021$predict = predict(Showcase_model_summer, data_summer_2021, type = 'response')
+data_Else$predict = predict(Showcase_model_summer, data_Else, type = 'response')
+
+
+data_spring_2021$predict = predict(Showcase_model_spring, data_spring_2021, type = 'response')
+data_Else2$predict = predict(Showcase_model_spring, data_Else, type = 'response')
+
+
+Name = c("P1", "P4", "P12", "P16", "P20", "P26")
+
+# Plot the results:
+
+CV <- ggplot() +
+  
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  
+  geom_point(aes(x = data_Else$TEP, y = data_Else$predict), colour = 'black', alpha = 0.3) + 
+
+  geom_point(aes(x = data_spring_2021$TEP, data_spring_2021$predict), colour = 'blue', fill = 'blue', shape = 23) +
+  
+  geom_label_repel(aes(x = data_spring_2021$TEP, data_spring_2021$predict, label = Name),
+                  box.padding   = 0.15, 
+                  point.padding = 0.15,
+                  segment.linetype = 1,
+                  segment.color = 'blue', 
+                  max.overlaps = Inf) +
+
+
+  theme_classic() +
+  xlab("Measured TEP") +
+  ylab("Predicted TEP") +
+  ylim(0, 160) +
+  xlim(0, 160)
+  
+
+pdf(file = "/Users/michaellivingston/Desktop/CV.pdf",   # The directory you want to save the file in
+    width = 11, # The width of the plot in inches
+    height = 7) # The height of the plot in inches
+
+CV
+
+dev.off()
+
+
+```
+
+
+
+
+
+
