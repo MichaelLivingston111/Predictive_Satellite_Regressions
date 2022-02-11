@@ -1,0 +1,66 @@
+---
+title: 'Prediction Function'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# This file contains code that inputs all satellite data cleaned and sorted in python, and makes predictions from the selected model below. I prefer to use the R statistical language to create the model and make predicitons as I find it more intutive. Once the predictions are made, they are packaged into another dataframe. This dataframe is then utilized in the python file "Satellite regressions" to visualize all the predicitons.
+
+
+# Load required libraries:
+```{r}
+
+suppressMessages(library(caret))
+suppressMessages(library(lme4))
+suppressMessages(library(feather))
+suppressMessages(library(arrow))
+suppressMessages(library(dplyr))
+suppressMessages(library(car))
+suppressMessages(library(caret))
+suppressMessages(library(MuMIn))
+
+```
+
+
+# Create the model of choice. This model was validated and selected in the R code "Stepwise_Regression_Model_Selection":
+```{r}
+# Upload the data from a total data file:
+total_data <- read.csv("Total_Sat_Data_All_Var.csv")
+UpperMixed_data <- total_data %>% select(TEP, Log_Chl, Temperature, Log_MLD, MLD, Season, POC, Avg_PAR)
+
+# Create the model:
+model <- lm(TEP ~ Log_Chl + Temperature + POC + Season, data = UpperMixed_data) 
+
+
+# Examine the model summary:
+summary(model)
+
+
+```
+
+
+# Create a 'Prediction function'. This function will take large data sets as an input, and return the predictions made by the above model.
+```{r}
+
+Predict_fn <- function(df) {
+  
+  predictions <- predict(model, df, type = "response")  # Call the model and create predictions.
+  predictions <- as.data.frame(predictions)  # Store the results in a dataframe.
+  
+  predictions$POC <- df$POC  # Add POC as a variable in the predictions dataframe - for ratio derivations later on.
+  
+  return(predictions)
+  
+}
+
+
+```
+
+
+
+
+
