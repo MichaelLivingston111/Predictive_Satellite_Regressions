@@ -8,7 +8,12 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-# This file contains code that inputs all satellite data cleaned and sorted in python, and makes predictions from the selected model below. I prefer to use the R statistical language to create the model and make predicitons as I find it more intutive. Once the predictions are made, they are packaged into another dataframe. This dataframe is then utilized in the python file "Satellite regressions" to visualize all the predicitons.
+# This file contains code that inputs all satellite data cleaned and sorted in
+python, and makes predictions from the selected model below. I prefer to use 
+the R statistical language to create the model and make predictions as I find 
+it more intuitive. Once the predictions are made, they are packaged into 
+another dataframe. This dataframe is then utilized in the python file 
+"Satellite regressions" to visualize all the predictions.
 
 
 # Load required libraries:
