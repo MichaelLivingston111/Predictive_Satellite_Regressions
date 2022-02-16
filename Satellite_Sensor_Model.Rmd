@@ -25,6 +25,8 @@ suppressMessages(library(car))
 suppressMessages(library(GGally))
 suppressMessages(library(reshape2))
 suppressMessages(library(ggrepel))
+suppressMessages(library(mgcv))
+suppressMessages(library(visreg))
 
 ```
 
@@ -36,12 +38,18 @@ suppressMessages(library(ggrepel))
 total_data <- read.csv("Total_Sat_Data_All_Var.csv")
 
 # Specify all the relevant variables:
-data <- total_data %>% select(TEP, Temperature, Season, Log_Chl, POC, Avg_PAR, SST, Region)
+data <- total_data %>% select(TEP, Temperature, Season, Log_Chl, POC, Avg_PAR)
+
+
+
+ggplot(total_data, aes(Log_Chl, TEP, colour = Season)) +
+         geom_point()
+
 
 ```
 
 
-# Step-wise Regressions models: Both forward and backward sequences for both types of models:
+# Step-wise Regressions models: Examine the most influential predictor variables:
 ```{r}
 
 # Define intercept-only model
@@ -66,8 +74,6 @@ backward$coefficients
 
 plot(backward$residuals ~ backward$fitted.values)
 
-
-# Both model selection techniques coverged on the same set of variables, outlined below.
 ```
 
 
@@ -78,40 +84,21 @@ plot(backward$residuals ~ backward$fitted.values)
 # Base model:
 base_model = lm(TEP ~ Log_Chl, data = data)
 
-summary(base_model)
-r.squaredGLMM(base_model)
-
 
 # Model 2:
 model_2 = lm(TEP ~ Temperature + Log_Chl, data = data)
-
-summary(model_2)
-r.squaredGLMM(model_2)
 
 
 # Model 3:
 model_3 = lm(TEP ~ Temperature + Log_Chl + POC, data = data)
 
-summary(model_3)
-r.squaredGLMM(model_3)
-
 
 # Linear model:
 Satellite_lm = lm(TEP ~ Temperature + Log_Chl + POC + Season, data = data)
 
-summary(Satellite_lm)
-r.squaredGLMM(Satellite_lm)
-
-
 
 # Ideal satellite model:
 Satellite_All_lmer = lmer(TEP ~ Temperature + Log_Chl + POC + (1|Season), data = data)
-
-summary(Satellite_All_lmer)
-r.squaredGLMM(Satellite_All_lmer)
-
-
-
 
 
 ```
@@ -125,7 +112,7 @@ car::vif(model_2)
 car::vif(model_3)
 car::vif(Satellite_All_lmer)
 car::vif(Satellite_lm)
-
+car::vif(model_4)
 
 # No concerns about multicollinearity....
 
@@ -135,8 +122,8 @@ car::vif(Satellite_lm)
 # What model is prefferred? Check AIC and AICc:
 ```{r}
 
-AIC(Satellite_All_lmer, Satellite_lm, base_model, model_2, model_3)
-AICc(Satellite_All_lmer, Satellite_lm, base_model, model_2, model_3)
+AIC(Satellite_All_lmer, Satellite_lm, base_model, model_2, model_3, model_4)
+AICc(Satellite_All_lmer, Satellite_lm, base_model, model_2, model_3, model_4)
 
 # Linear model 'Satellite lm' is the preffered model based of AIC scores.
 
@@ -277,8 +264,10 @@ for (i in 1:30) {
   # Running the models and creating predictions, accuracy metrics on the partitioned training data:
   
   # Ideal model::
-  Sat_lmer_CV<- lmer(TEP ~ Log_Chl + Temperature + POC + (1|Season), data = train.data1) 
-
+  #Sat_lmer_CV<- lmer(TEP ~ Log_Chl + Temperature + POC + (1|Season), data = train.data1) 
+  Sat_lmer_CV<- lm(TEP ~ Log_Chl + Temperature + POC + Avg_PAR, data = train.data1) 
+  
+  
   # Linear model:
   Sat_lm_CV<- lm(TEP ~ Log_Chl + Temperature + POC, data = train.data1) 
   
@@ -384,7 +373,7 @@ Figure
 MAE <- cbind(base_MAE, model_2_MAE, model_3_MAE, Sat_lm_MAE, Sat_lmer_MAE)
 MAE <- as.data.frame(MAE)
 colnames(MAE) <- c('Chl','Chl + Temperature', 'Chl + Temperature + POC', 
-                'Chl + Temperature + POC + Season', 'Chl + Temperature + POC + (1|Season)')
+                'Chl + Temperature + POC + Season', 'Chl + Temperature + POC + PAR')
 
 
 # Reconstruct the dataframe:
@@ -397,12 +386,16 @@ MAE_box <- ggplot(MAE_dff, aes(x = MAE, y = value)) +
   geom_boxplot(fill = "blue", alpha = 0.5) +
   ylab("Mean absolute error") +
   xlab("") +
-  ylim(8, 17) +
+  ylim(7, 17) +
   theme_pubr() +
+  theme(text = element_text(size=20)) +
   coord_flip()
 
 
+MAE_box
+
 ```
+
 
 
 # Now lets try predicting an entire independent research expedition:
@@ -476,7 +469,339 @@ CV
 ```
 
 
+# GAMS
+```{r}
+
+# Model 4:
+model_gam = gam(TEP ~ s(Temperature) + (Log_Chl) + (log(POC)), data = data)
+
+model_lm = gam(TEP ~ (Temperature) + (Log_Chl) + (log(POC) + Season), data = data)
+
+```
+
+# GAM residuals
+```{r}
+
+gam.check(model_lm)
+
+summary(model_lm)
+```
+
+# Smoothing terms
+```{r}
+
+par(mfrow = c(1, 3), omi = c(0, 0, 0.5, 0))
+plot(model_gam, residuals = TRUE, pch = 1)
+title(outer = TRUE, main = "", font.main = 1)
+
+
+```
+
+# Residuals for each predictor:
+```{r}
+resid <- resid(model_lm)
+fit <- predict(model_lm)
+
+par(mfrow = c(2, 2), mar = c(4, 4, 1, 1))
+plot(resid ~ fit); abline(h = 0, lty = 2)
+plot(resid ~ data$Log_Chl); abline(h = 0, lty = "dashed")
+plot(resid ~ data$Temperature); abline(h = 0, lty = "dashed")
+plot(resid ~ data$POC); abline(h = 0, lty = "dashed")
+abline(h = 0, lty = "dashed")
+
+
+```
+
+# Modify the vis.gam function to include my colours!
+```{r}
+jet.colors <-colorRampPalette(c("#00007F", "blue", "#007FFF", "cyan",
+                                "#7FFF7F", "yellow", "#FF7F00", "red", "#7F0000"))
+
+magma.colors <-colorRampPalette(c("#4B2991", "#5C2995", "#692A99", "#872CA2", "#952EA0", "#B1339E", "#CA3C97",
+                                  "#D44292", "#EA4F88", "#F2637F", "#F66D7A", "#F98477", "#F79C79",
+                                "#F6A97A", "#EFCC98", "#EED19C", "#EDD9A3"))
+
+myvis.gam <- function (x, view = NULL, cond = list(), n.grid = 30, too.far = 0, 
+          col = NA, color = "heat", contour.col = NULL, se = -1, type = "link", 
+          plot.type = "persp", zlim = NULL, nCol = 50, ...) 
+{
+  fac.seq <- function(fac, n.grid) {
+    fn <- length(levels(fac))
+    gn <- n.grid
+    if (fn > gn) 
+      mf <- factor(levels(fac))[1:gn]
+    else {
+      ln <- floor(gn/fn)
+      mf <- rep(levels(fac)[fn], gn)
+      mf[1:(ln * fn)] <- rep(levels(fac), rep(ln, fn))
+      mf <- factor(mf, levels = levels(fac))
+    }
+    mf
+  }
+  dnm <- names(list(...))
+  v.names <- names(x$var.summary)
+  if (is.null(view)) {
+    k <- 0
+    view <- rep("", 2)
+    for (i in 1:length(v.names)) {
+      ok <- TRUE
+      if (is.matrix(x$var.summary[[i]])) 
+        ok <- FALSE
+      else if (is.factor(x$var.summary[[i]])) {
+        if (length(levels(x$var.summary[[i]])) <= 1) 
+          ok <- FALSE
+      }
+      else {
+        if (length(unique(x$var.summary[[i]])) == 1) 
+          ok <- FALSE
+      }
+      if (ok) {
+        k <- k + 1
+        view[k] <- v.names[i]
+      }
+      if (k == 2) 
+        break
+    }
+    if (k < 2) 
+      stop("Model does not seem to have enough terms to do anything useful")
+  }
+  else {
+    if (sum(view %in% v.names) != 2) 
+      stop(paste(c("view variables must be one of", v.names), 
+                 collapse = ", "))
+    for (i in 1:2) if (!inherits(x$var.summary[[view[i]]], 
+                                 c("numeric", "factor"))) 
+      stop("Don't know what to do with parametric terms that are not simple numeric or factor variables")
+  }
+  ok <- TRUE
+  for (i in 1:2) if (is.factor(x$var.summary[[view[i]]])) {
+    if (length(levels(x$var.summary[[view[i]]])) <= 1) 
+      ok <- FALSE
+  }
+  else {
+    if (length(unique(x$var.summary[[view[i]]])) <= 1) 
+      ok <- FALSE
+  }
+  if (!ok) 
+    stop(paste("View variables must contain more than one value. view = c(", 
+               view[1], ",", view[2], ").", sep = ""))
+  if (is.factor(x$var.summary[[view[1]]])) 
+    m1 <- fac.seq(x$var.summary[[view[1]]], n.grid)
+  else {
+    r1 <- range(x$var.summary[[view[1]]])
+    m1 <- seq(r1[1], r1[2], length = n.grid)
+  }
+  if (is.factor(x$var.summary[[view[2]]])) 
+    m2 <- fac.seq(x$var.summary[[view[2]]], n.grid)
+  else {
+    r2 <- range(x$var.summary[[view[2]]])
+    m2 <- seq(r2[1], r2[2], length = n.grid)
+  }
+  v1 <- rep(m1, n.grid)
+  v2 <- rep(m2, rep(n.grid, n.grid))
+  newd <- data.frame(matrix(0, n.grid * n.grid, 0))
+  for (i in 1:length(x$var.summary)) {
+    ma <- cond[[v.names[i]]]
+    if (is.null(ma)) {
+      ma <- x$var.summary[[i]]
+      if (is.numeric(ma)) 
+        ma <- ma[2]
+    }
+    if (is.matrix(x$var.summary[[i]])) 
+      newd[[i]] <- matrix(ma, n.grid * n.grid, ncol(x$var.summary[[i]]), 
+                          byrow = TRUE)
+    else newd[[i]] <- rep(ma, n.grid * n.grid)
+  }
+  names(newd) <- v.names
+  newd[[view[1]]] <- v1
+  newd[[view[2]]] <- v2
+  if (type == "link") 
+    zlab <- paste("linear predictor")
+  else if (type == "response") 
+    zlab <- type
+  else stop("type must be \"link\" or \"response\"")
+  fv <- predict.gam(x, newdata = newd, se.fit = TRUE, type = type)
+  z <- fv$fit
+  if (too.far > 0) {
+    ex.tf <- exclude.too.far(v1, v2, x$model[, view[1]], 
+                             x$model[, view[2]], dist = too.far)
+    fv$se.fit[ex.tf] <- fv$fit[ex.tf] <- NA
+  }
+  if (is.factor(m1)) {
+    m1 <- as.numeric(m1)
+    m1 <- seq(min(m1) - 0.5, max(m1) + 0.5, length = n.grid)
+  }
+  if (is.factor(m2)) {
+    m2 <- as.numeric(m2)
+    m2 <- seq(min(m1) - 0.5, max(m2) + 0.5, length = n.grid)
+  }
+  if (se <= 0) {
+    old.warn <- options(warn = -1)
+    av <- matrix(c(0.5, 0.5, rep(0, n.grid - 1)), n.grid, 
+                 n.grid - 1)
+    options(old.warn)
+    max.z <- max(z, na.rm = TRUE)
+    z[is.na(z)] <- max.z * 10000
+    z <- matrix(z, n.grid, n.grid)
+    surf.col <- t(av) %*% z %*% av
+    surf.col[surf.col > max.z * 2] <- NA
+    if (!is.null(zlim)) {
+      if (length(zlim) != 2 || zlim[1] >= zlim[2]) 
+        stop("Something wrong with zlim")
+      min.z <- zlim[1]
+      max.z <- zlim[2]
+    }
+    else {
+      min.z <- min(fv$fit, na.rm = TRUE)
+      max.z <- max(fv$fit, na.rm = TRUE)
+    }
+    surf.col <- surf.col - min.z
+    surf.col <- surf.col/(max.z - min.z)
+    surf.col <- round(surf.col * nCol)
+    con.col <- 1
+    if (color == "heat") {
+      pal <- heat.colors(nCol)
+      con.col <- 3
+    }
+    else if (color == "topo") {
+      pal <- topo.colors(nCol)
+      con.col <- 2
+    }
+    else if (color == "cm") {
+      pal <- cm.colors(nCol)
+      con.col <- 1
+    }
+    else if (color == "terrain") {
+      pal <- terrain.colors(nCol)
+      con.col <- 2
+    }
+    else if (color == "gray" || color == "bw") {
+      pal <- gray(seq(0.1, 0.9, length = nCol))
+      con.col <- 1
+    }
+    ### customized here
+    else if (color == 'jet') {
+      pal <- jet.colors(nCol)
+      con.col = 1
+    }
+    ### customized here <- MINE
+    else if (color == 'magma') {
+      pal <- magma.colors(nCol)
+      con.col = 1
+    }
+    ####
+    else stop("color scheme not recognised")
+    if (is.null(contour.col)) 
+      contour.col <- con.col
+    surf.col[surf.col < 1] <- 1
+    surf.col[surf.col > nCol] <- nCol
+    if (is.na(col)) 
+      col <- pal[as.array(surf.col)]
+    z <- matrix(fv$fit, n.grid, n.grid)
+    if (plot.type == "contour") {
+      stub <- paste(ifelse("xlab" %in% dnm, "", ",xlab=view[1]"), 
+                    ifelse("ylab" %in% dnm, "", ",ylab=view[2]"), 
+                    ifelse("main" %in% dnm, "", ",main=zlab"), ",...)", 
+                    sep = "")
+      if (color != "bw") {
+        txt <- paste("image(m1,m2,z,col=pal,zlim=c(min.z,max.z)", 
+                     stub, sep = "")
+        eval(parse(text = txt))
+        txt <- paste("contour(m1,m2,z,col=contour.col,zlim=c(min.z,max.z)", 
+                     ifelse("add" %in% dnm, "", ",add=TRUE"), ",...)", 
+                     sep = "")
+        eval(parse(text = txt))
+      }
+      else {
+        txt <- paste("contour(m1,m2,z,col=1,zlim=c(min.z,max.z)", 
+                     stub, sep = "")
+        eval(parse(text = txt))
+      }
+    }
+    else {
+      stub <- paste(ifelse("xlab" %in% dnm, "", ",xlab=view[1]"), 
+                    ifelse("ylab" %in% dnm, "", ",ylab=view[2]"), 
+                    ifelse("main" %in% dnm, "", ",zlab=zlab"), ",...)", 
+                    sep = "")
+      if (color == "bw") {
+        op <- par(bg = "white")
+        txt <- paste("persp(m1,m2,z,col=\"white\",zlim=c(min.z,max.z) ", 
+                     stub, sep = "")
+        eval(parse(text = txt))
+        par(op)
+      }
+      else {
+        txt <- paste("persp(m1,m2,z,col=col,zlim=c(min.z,max.z)", 
+                     stub, sep = "")
+        eval(parse(text = txt))
+      }
+    }
+  }
+  else {
+    if (color == "bw" || color == "gray") {
+      subs <- paste("grey are +/-", se, "s.e.")
+      lo.col <- "gray"
+      hi.col <- "gray"
+    }
+    else {
+      subs <- paste("red/green are +/-", se, "s.e.")
+      lo.col <- "green"
+      hi.col <- "red"
+    }
+    if (!is.null(zlim)) {
+      if (length(zlim) != 2 || zlim[1] >= zlim[2]) 
+        stop("Something wrong with zlim")
+      min.z <- zlim[1]
+      max.z <- zlim[2]
+    }
+    else {
+      z.max <- max(fv$fit + fv$se.fit * se, na.rm = TRUE)
+      z.min <- min(fv$fit - fv$se.fit * se, na.rm = TRUE)
+    }
+    zlim <- c(z.min, z.max)
+    z <- fv$fit - fv$se.fit * se
+    z <- matrix(z, n.grid, n.grid)
+    if (plot.type == "contour") 
+      warning("sorry no option for contouring with errors: try plot.gam")
+    stub <- paste(ifelse("xlab" %in% dnm, "", ",xlab=view[1]"), 
+                  ifelse("ylab" %in% dnm, "", ",ylab=view[2]"), ifelse("zlab" %in% 
+                                                                         dnm, "", ",zlab=zlab"), ifelse("sub" %in% dnm, 
+                                                                                                        "", ",sub=subs"), ",...)", sep = "")
+    txt <- paste("persp(m1,m2,z,col=col,zlim=zlim", ifelse("border" %in% 
+                                                             dnm, "", ",border=lo.col"), stub, sep = "")
+    eval(parse(text = txt))
+    par(new = TRUE)
+    z <- fv$fit
+    z <- matrix(z, n.grid, n.grid)
+    txt <- paste("persp(m1,m2,z,col=col,zlim=zlim", ifelse("border" %in% 
+                                                             dnm, "", ",border=\"black\""), stub, sep = "")
+    eval(parse(text = txt))
+    par(new = TRUE)
+    z <- fv$fit + se * fv$se.fit
+    z <- matrix(z, n.grid, n.grid)
+    txt <- paste("persp(m1,m2,z,col=col,zlim=zlim", ifelse("border" %in% 
+                                                             dnm, "", ",border=hi.col"), stub, sep = "")
+    eval(parse(text = txt))
+  }
+}
+```
 
 
 
+# Visualize:
+```{r}
+
+myvis.gam(model_lm, view = c("Log_Chl", "Temperature"), 
+          theta = -40, type = "response",  color = 'magma',
+          n.grid=50, border = NA, too.far = 0)
+
+
+
+```
+```{r}
+
+AIC(model_gam, model_lm)
+
+
+```
 
