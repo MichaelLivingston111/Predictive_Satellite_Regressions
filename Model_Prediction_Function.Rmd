@@ -38,7 +38,7 @@ total_data <- read.csv("Total_Sat_Data_All_Var.csv")
 UpperMixed_data <- total_data %>% select(TEP, Log_Chl, Temperature, Log_MLD, MLD, Season, POC, Avg_PAR)
 
 # Create the model:
-model <- lm(TEP ~ Log_Chl + Temperature + POC + Season, data = UpperMixed_data) 
+model <- lm(TEP ~ Log_Chl + Temperature + POC, data = UpperMixed_data) 
 
 
 # Examine the model summary:
@@ -54,9 +54,9 @@ summary(model)
 Predict_fn <- function(df) {
   
   predictions <- predict(model, df, type = "response")  # Call the model and create predictions.
-  predictions <- as.data.frame(predictions)  # Store the results in a dataframe.
+  predictions <- as.data.frame(predictions)  # Store the results in a data frame.
   
-  predictions$POC <- df$POC  # Add POC as a variable in the predictions dataframe - for ratio derivations later on.
+  predictions$POC <- df$POC  # Add POC as a variable in the predictions data frame - for ratio derivations later on.
   
   return(predictions)
   
@@ -65,6 +65,40 @@ Predict_fn <- function(df) {
 
 ```
 
+
+# Upload all the satellite data from 2021 to be used as predictors:
+```{r}
+
+# 8 day spring 2021 LineP:
+df_Spring_8D_2021 <- arrow::read_feather('May_2021_LineP.feather')
+
+# 8 day summer 2021 LineP:
+df_Summer_8D_2021 <- arrow::read_feather('Aug_2021_LineP.feather')
+
+
+```
+
+
+# Place all the predictions into a list:
+```{r}
+
+predictors <- vector(mode = "list", length = 2)
+names(predictors) <- c("Spring_2021", "Summer_2021")
+
+predictors[[1]] <- df_Spring_8D_2021; predictors[[2]] <- df_Summer_8D_2021
+
+```
+
+
+# Apply the function to the 2021 data, and convert the predictions to a feather file for transfer to python:
+```{r}
+
+Predictions <-  lapply(predictors, Predict_fn)
+
+feather::write_feather(Predictions[[1]], 'May_2021_Predictions.feather')
+feather::write_feather(Predictions[[2]], 'Aug_Sept_2021_Predictions.feather')
+
+```
 
 
 
