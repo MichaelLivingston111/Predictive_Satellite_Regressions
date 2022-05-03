@@ -33,17 +33,10 @@ suppressMessages(library(MuMIn))
 
 # Create the model of choice. This model was validated and selected in the R code "Stepwise_Regression_Model_Selection":
 ```{r}
+
 # Upload the data from a total data file:
 total_data <- read.csv("Total_Sat_Data_All_Var.csv")
-UpperMixed_data <- total_data %>% select(TEP, Log_Chl, Temperature, Log_MLD, MLD, Season, POC, Avg_PAR)
-
-# Create the model:
-model <- lm(TEP ~ Log_Chl + Temperature + POC, data = UpperMixed_data) 
-
-
-# Examine the model summary:
-summary(model)
-
+global_data <- read.csv("Total_data_DBO.csv")
 
 ```
 
@@ -51,24 +44,56 @@ summary(model)
 # Create a 'Prediction function'. This function will take large data sets as an input, and return the predictions made by the above model.
 ```{r}
 
-Predict_fn <- function(df) {
+Predict_fn_regional <- function(df) {
   
-  predictions <- predict(model, df, type = "response")  # Call the model and create predictions.
-  predictions <- as.data.frame(predictions)  # Store the results in a data frame.
+  # Select the relevant data for the model:
+  regional_data <- total_data %>% select(TEP, Log_Chl, Temperature, Log_MLD, MLD, Season, POC, Avg_PAR)
   
-  predictions$POC <- df$POC  # Add POC as a variable in the predictions data frame - for ratio derivations later on.
+  # Create the model:
+  regional_model <- lm(TEP ~ Log_Chl + Temperature + POC + Season, data = UpperMixed_data) 
   
-  return(predictions)
+  # Predictions:
+  regional_predictions <- predict(regional_model, df, type = "response")  # Call the model and create predictions.
+  regional_predictions <- as.data.frame(regional_predictions)  # Store the results in a data frame.
+  
+  # Extra data:
+  regional_predictions$POC <- df$POC  # Add POC as a variable in the predictions data frame - for ratio derivations later on.
+  
+  
+  return(regional_predictions)
   
 }
+
+Predict_fn_global <- function(df) {
+  
+  # Select the relevant data for the model:
+  global_data <- global_data %>% select(TEP, Season, Log_Chl, POC, Summer, Arctic, Area, Temperature)
+  global_data <- na.omit(global_data)
+  
+  # Create the model:
+  global_model <- lm(TEP ~ Log_Chl + POC + Temperature + Arctic, data = global_data)
+  
+  # Predictions:
+  global_predictions <- predict(global_model, df, type = "response")  # Call the model and create predictions.
+  global_predictions <- as.data.frame(global_predictions)  # Store the results in a data frame.
+  
+  # Extra data:
+  global_predictions$POC <- df$POC  # Add POC as a variable in the predictions data frame - for ratio derivations later on.
+  
+  
+  return(global_predictions)
+  
+}
+
 
 
 ```
 
 
-# Upload all the satellite data from 2021 to be used as predictors:
+# Prediction funciton application: Regional model
 ```{r}
 
+# Upload all the satellite data from 2021 to be used as predictors:
 # 8 day spring 2021 LineP:
 df_Spring_8D_2021 <- arrow::read_feather('May_2021_LineP.feather')
 
@@ -76,30 +101,50 @@ df_Spring_8D_2021 <- arrow::read_feather('May_2021_LineP.feather')
 df_Summer_8D_2021 <- arrow::read_feather('Aug_2021_LineP.feather')
 
 
-```
-
 
 # Place all the predictions into a list:
-```{r}
-
 predictors <- vector(mode = "list", length = 2)
 names(predictors) <- c("Spring_2021", "Summer_2021")
 
 predictors[[1]] <- df_Spring_8D_2021; predictors[[2]] <- df_Summer_8D_2021
 
-```
 
 
 # Apply the function to the 2021 data, and convert the predictions to a feather file for transfer to python:
-```{r}
+Regional_Predictions <-  lapply(predictors, Predict_fn_regional)
 
-Predictions <-  lapply(predictors, Predict_fn)
-
-feather::write_feather(Predictions[[1]], 'May_2021_Predictions.feather')
-feather::write_feather(Predictions[[2]], 'Aug_Sept_2021_Predictions.feather')
+feather::write_feather(Regional_Predictions[[1]], 'May_2021_Predictions.feather')
+feather::write_feather(Regional_Predictions[[2]], 'Aug_Sept_2021_Predictions.feather')
 
 ```
 
 
+# Prediction funciton application: Global model
+```{r}
+
+# Upload all the satellite data from 2021 to be used as predictors:
+# 8 day spring 2021 Global:
+df_Spring_8D_2021 <- arrow::read_feather('May_2021_LineP.feather')
+
+# 8 day summer 2021 Global:
+df_Summer_8D_2021 <- arrow::read_feather('Aug_2021_LineP.feather')
+
+
+
+# Place all the predictions into a list:
+predictors <- vector(mode = "list", length = 2)
+names(predictors) <- c("Spring_2021", "Summer_2021")
+
+predictors[[1]] <- df_Summer_8D_2021; predictors[[2]] <- df_Summer_8D_2021
+
+
+
+# Apply the function to the 2021 data, and convert the predictions to a feather file for transfer to python:
+Global_Predictions <-  lapply(predictors, Predict_fn_global)
+
+feather::write_feather(Global_Predictions[[1]], 'May_2021_Predictions_Global.feather')
+feather::write_feather(Global_Predictions[[2]], 'Aug_Sept_2021_Predictions_Global.feather')
+
+```
 
 
