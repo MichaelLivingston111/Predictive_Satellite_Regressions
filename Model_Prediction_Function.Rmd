@@ -9,11 +9,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 # This file contains code that inputs all satellite data cleaned and sorted in
-python, and makes predictions from the selected model below. I prefer to use 
-the R statistical language to create the model and make predictions as I find 
-it more intuitive. Once the predictions are made, they are packaged into 
-another dataframe. This dataframe is then utilized in the python file 
-"Satellite regressions" to visualize all the predictions.
+# python, and makes predictions from the selected model below. I prefer to use 
+# the R statistical language to create the model and make predictions as I find 
+# it more intuitive. Once the predictions are made, they are packaged into 
+# another dataframe. This dataframe is then utilized in the python file 
+# "Satellite regressions" to visualize all the predictions.
 
 
 # Load required libraries:
@@ -31,26 +31,31 @@ suppressMessages(library(MuMIn))
 ```
 
 
-# Create the model of choice. This model was validated and selected in the R code "Stepwise_Regression_Model_Selection":
+
+
+# Input the relevant data sets: Regional and global (Regional + Arctic)
 ```{r}
 
 # Upload the data from a total data file:
-total_data <- read.csv("Total_Sat_Data_All_Var.csv")
-global_data <- read.csv("Total_data_DBO.csv")
+# total_data <- read.csv("Total_Sat_Data_All_Var.csv")
+total_data <- read.csv("MODEL_DATA.csv")
+global_data <- read.csv("MODEL_DATA_GLOBAL.csv")
 
 ```
 
 
-# Create a 'Prediction function'. This function will take large data sets as an input, and return the predictions made by the above model.
+# Create a set of 'Prediction functions'. These functions will take large data sets as an input, and return the predictions made by the model. The model was validated and selected in the repository titled "Model_Selection":
+
+# Regional Model
 ```{r}
 
 Predict_fn_regional <- function(df) {
   
   # Select the relevant data for the model:
-  regional_data <- total_data %>% select(TEP, Log_Chl, Temperature, Log_MLD, MLD, Season, POC, Avg_PAR)
+  regional_data <- total_data %>% select(TEP, Log_Chl, Temperature, Season, POC)
   
   # Create the model:
-  regional_model <- lm(TEP ~ Log_Chl + Temperature + POC + Season, data = UpperMixed_data) 
+  regional_model <- lm(TEP ~ Log_Chl + Temperature + POC + Season, data = regional_data) 
   
   # Predictions:
   regional_predictions <- predict(regional_model, df, type = "response")  # Call the model and create predictions.
@@ -58,12 +63,18 @@ Predict_fn_regional <- function(df) {
   
   # Extra data:
   regional_predictions$POC <- df$POC  # Add POC as a variable in the predictions data frame - for ratio derivations later on.
-  
+  regional_predictions$Temperature <- df$Temperature  # Add POC as a variable in the predictions data frame - for ratio derivations later on.
+  regional_predictions$Log_Chl <- df$Log_Chl  # Add POC as a variable in the predictions data frame - for ratio derivations later on.
   
   return(regional_predictions)
   
 }
 
+```
+
+
+# Global Model
+```{r}
 Predict_fn_global <- function(df) {
   
   # Select the relevant data for the model:
@@ -85,8 +96,6 @@ Predict_fn_global <- function(df) {
   
 }
 
-
-
 ```
 
 
@@ -94,10 +103,11 @@ Predict_fn_global <- function(df) {
 ```{r}
 
 # Upload all the satellite data from 2021 to be used as predictors:
-# 8 day spring 2021 LineP:
+
+# 8 day average spring 2021 regional:
 df_Spring_8D_2021 <- arrow::read_feather('May_2021_LineP.feather')
 
-# 8 day summer 2021 LineP:
+# 8 day average summer 2021 regional:
 df_Summer_8D_2021 <- arrow::read_feather('Aug_2021_LineP.feather')
 
 
@@ -123,10 +133,11 @@ feather::write_feather(Regional_Predictions[[2]], 'Aug_Sept_2021_Predictions.fea
 ```{r}
 
 # Upload all the satellite data from 2021 to be used as predictors:
-# 8 day spring 2021 Global:
+
+# 8 day average spring 2021 global:
 df_Spring_8D_2021 <- arrow::read_feather('May_2021_LineP.feather')
 
-# 8 day summer 2021 Global:
+# 8 day average summer 2021 global:
 df_Summer_8D_2021 <- arrow::read_feather('Aug_2021_LineP.feather')
 
 
@@ -148,3 +159,7 @@ feather::write_feather(Global_Predictions[[2]], 'Aug_Sept_2021_Predictions_Globa
 ```
 
 
+# Great! Now the functions have created large dataframes complete with target
+# predictions within the .feather files. These files can now be read into 
+# python for data visualization (this can also be done in R, but I prefer the 
+# visualization techniques in python).
