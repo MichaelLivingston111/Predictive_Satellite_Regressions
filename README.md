@@ -1,4 +1,4 @@
-# Remote sensor algorithms: Predicting marine exopolymer concentrations over space and time
+# Remote sensor algorithms: Predicting marine exopolymer concentrations and carbon sequestration potential over large spatial scales.
 
 
 Marine exopolymers are an important element in global carbon cycle as they are critical for the sequestraion of carbon dioxide in the ocean. Furthermore, they are an important substance in the desalination industry as they frequently clog reverse osmosis filters critical for efficient desalination. As such, it is important to develop models that can accurately predict marine expolymer concentrations. 
