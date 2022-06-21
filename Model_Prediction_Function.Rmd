@@ -44,7 +44,9 @@ global_data <- read.csv("MODEL_DATA_GLOBAL.csv")
 ```
 
 
-# Create a set of 'Prediction functions'. These functions will take large data sets as an input, and return the predictions made by the model. The model was validated and selected in the repository titled "Model_Selection":
+# Create a set of 'Prediction functions'. These functions will take large 
+# data sets as an input, and return the predictions made by the model. The 
+# model was validated and selected in the repository titled "Model_Selection":
 
 # Regional Model
 ```{r}
