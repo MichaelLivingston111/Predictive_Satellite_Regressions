@@ -54,19 +54,23 @@ global_data <- read.csv("MODEL_DATA_GLOBAL.csv")
 Predict_fn_regional <- function(df) {
   
   # Select the relevant data for the model:
-  regional_data <- total_data %>% select(TEP, Log_Chl, Temperature, Season, POC)
+  regional_data <- total_data %>% select(TEP, Log_Chl, Temperature, 
+                                         Season, POC)
   
   # Create the model:
-  regional_model <- lm(TEP ~ Log_Chl + Temperature + POC + Season, data = regional_data) 
+  regional_model <- lm(TEP ~ Log_Chl + Temperature + POC + Season, 
+                       data = regional_data) 
   
   # Predictions:
-  regional_predictions <- predict(regional_model, df, type = "response")  # Call the model and create predictions.
-  regional_predictions <- as.data.frame(regional_predictions)  # Store the results in a data frame.
+  regional_predictions <- predict(regional_model, df, 
+                                  type = "response")  # Create predictions 
+                                           
+  regional_predictions <- as.data.frame(regional_predictions)  # Store results
   
-  # Extra data:
-  regional_predictions$POC <- df$POC  # Add POC as a variable in the predictions data frame - for ratio derivations later on.
-  regional_predictions$Temperature <- df$Temperature  # Add POC as a variable in the predictions data frame - for ratio derivations later on.
-  regional_predictions$Log_Chl <- df$Log_Chl  # Add POC as a variable in the predictions data frame - for ratio derivations later on.
+  # Add extra parameters:
+  regional_predictions$POC <- df$POC
+  regional_predictions$Temperature <- df$Temperature  
+  regional_predictions$Log_Chl <- df$Log_Chl  
   
   return(regional_predictions)
   
@@ -80,19 +84,21 @@ Predict_fn_regional <- function(df) {
 Predict_fn_global <- function(df) {
   
   # Select the relevant data for the model:
-  global_data <- global_data %>% select(TEP, Season, Log_Chl, POC, Summer, Arctic, Area, Temperature)
+  global_data <- global_data %>% select(TEP, Season, Log_Chl, POC, Summer, 
+                                        Arctic, Area, Temperature)
   global_data <- na.omit(global_data)
   
   # Create the model:
-  global_model <- lm(TEP ~ Log_Chl + POC + Temperature + Arctic, data = global_data)
+  global_model <- lm(TEP ~ Log_Chl + POC + Temperature + Arctic, 
+                     data = global_data)
   
   # Predictions:
-  global_predictions <- predict(global_model, df, type = "response")  # Call the model and create predictions.
-  global_predictions <- as.data.frame(global_predictions)  # Store the results in a data frame.
+  global_predictions <- predict(global_model, df, 
+                                type = "response") # Create predictions
+  global_predictions <- as.data.frame(global_predictions)  # Store the results 
   
-  # Extra data:
-  global_predictions$POC <- df$POC  # Add POC as a variable in the predictions data frame - for ratio derivations later on.
-  
+  # Add extra parameters:
+  global_predictions$POC <- df$POC  
   
   return(global_predictions)
   
@@ -122,11 +128,14 @@ predictors[[1]] <- df_Spring_8D_2021; predictors[[2]] <- df_Summer_8D_2021
 
 
 
-# Apply the function to the 2021 data, and convert the predictions to a feather file for transfer to python:
+# Apply the function to the 2021 data, and convert the predictions to a feather 
+# file for transfer to python:
 Regional_Predictions <-  lapply(predictors, Predict_fn_regional)
 
-feather::write_feather(Regional_Predictions[[1]], 'May_2021_Predictions.feather')
-feather::write_feather(Regional_Predictions[[2]], 'Aug_Sept_2021_Predictions.feather')
+feather::write_feather(Regional_Predictions[[1]], 
+                       'May_2021_Predictions.feather')
+feather::write_feather(Regional_Predictions[[2]], 
+                       'Aug_Sept_2021_Predictions.feather')
 
 ```
 
@@ -152,11 +161,14 @@ predictors[[1]] <- df_Summer_8D_2021; predictors[[2]] <- df_Summer_8D_2021
 
 
 
-# Apply the function to the 2021 data, and convert the predictions to a feather file for transfer to python:
+# Apply the function to the 2021 data, and convert the predictions to a feather 
+# file for transfer to python:
 Global_Predictions <-  lapply(predictors, Predict_fn_global)
 
-feather::write_feather(Global_Predictions[[1]], 'May_2021_Predictions_Global.feather')
-feather::write_feather(Global_Predictions[[2]], 'Aug_Sept_2021_Predictions_Global.feather')
+feather::write_feather(Global_Predictions[[1]], 
+                       'May_2021_Predictions_Global.feather')
+feather::write_feather(Global_Predictions[[2]], 
+                       'Aug_Sept_2021_Predictions_Global.feather')
 
 ```
 
