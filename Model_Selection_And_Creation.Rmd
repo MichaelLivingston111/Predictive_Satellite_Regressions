@@ -1,0 +1,210 @@
+---
+title: "Model_Creation_And_Selection"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Context: Marine exopolymeric substances have significant importance due to 
+# their role in marine carbon dioxide sequestration (as particulate organic 
+# carbon). This substances play a critical role in the efficiency of carbon 
+# sequestration in our oceans, however, no large scale estimations currently 
+# exist for these substances. Therefore, this project seeks to create reliable 
+# statistical models to predict their concentrations from satellite sensors, 
+# in order to derive large scale estimations on our oceans surface. This models 
+# can also be applied to historical satellite data, in order to investigate 
+# patterns or changes over time.
+
+
+
+# This file contains the base code for selecting the optimal model based on a 
+# series of available predictor variables and measured data sets.
+
+
+# Upload required libraries:
+```{r}
+
+suppressMessages(library(ggplot2))
+suppressMessages(library(caret))
+suppressMessages(library(ggpubr))
+suppressMessages(library(EnvStats))
+suppressMessages(library(jtools))
+suppressMessages(library(MuMIn))
+suppressMessages(library(lme4))
+suppressMessages(library(feather))
+suppressMessages(library(arrow))
+suppressMessages(library(dplyr))
+suppressMessages(library(viridis))
+suppressMessages(library(grid))
+suppressMessages(library(car))
+suppressMessages(library(GGally))
+suppressMessages(library(reshape2))
+suppressMessages(library(ggrepel))
+suppressMessages(library(mgcv))
+suppressMessages(library(visreg))
+
+```
+
+
+
+# Upload all the data, and sort into workable dataframes. There are two data 
+# sets available. "Regional" and "Global" The Global dataset includes data from 
+# the Arctic.
+```{r}
+
+# Create a function to read the csv files, index out the variables of interest, 
+# and create another category.
+
+
+Read_fn <- function(file) {
+  
+  data <- read.csv(file)  # Read the csv
+  
+  data <- data %>% 
+    mutate(Bloom = if_else(Chl > 2.5, 1, 0))
+  
+  data <- data %>%  # Index out variables of interest
+    select(TEP, Temperature, Season, Log_Chl, POC, MLD, Summer, 
+           Winter, Bloom, Area)
+  
+
+  return(data)
+  
+}
+
+
+# Input required files into function:
+regional_data <- Read_fn("MODEL_DATA.csv")  # Regional
+global_data <- Read_fn("MODEL_DATA_GLOBAL.csv")  # Global
+
+```
+
+
+
+# Create a series of predictive models based off prior determinations. Start
+# with a 'base' model using only one predictor, but sequentially add more 
+# variables. 
+
+# Here, we will use both linear regression and mixed effects predictive models:
+```{r}
+
+# *Note: Cannot use MLD with global models*
+
+# Base models (linear by default):
+Chl_model = lm(TEP ~ Log_Chl, data = global_data)  # Chl
+POC_model = lm(TEP ~ POC, data = global_data)  # POC
+
+# Create a list of all base linear models:
+Base_LM_list <- list(Chl_model, POC_model)
+
+
+
+# Linear models:
+Chl_Temp_LM = lm(TEP ~ Temperature + Log_Chl, 
+                   data = global_data)  # Chl, Temp
+
+Chl_MLD_LM = lm(TEP ~ Temperature + Log_Chl + MLD, 
+                   data = regional_data)  # Chl, MLD
+
+Chl_Temp_POC_LM = lm(TEP ~ Temperature + Log_Chl + 
+                   POC, data = global_data) # Chl + Temp + POC
+
+Chl_Temp_POC_Season_LM = lm(TEP ~ Temperature + 
+                   Log_Chl + POC + Season, 
+                   data = global_data)  # Chl + Temp + POC + Season
+
+Chl_Temp_POC_Season_Bloom_LM = lm(TEP ~ Temperature + 
+                   Log_Chl + POC + Season + Bloom, 
+                   data = global_data)  # Chl + Temp + POC + Season + Bloom
+
+Chl_Temp_POC_Bloom_Region_LM = lm(TEP ~ Temperature + 
+                   Log_Chl + POC + Bloom + Area, 
+                   data = global_data)  # Chl + Temp + POC + 
+                                        # + Bloom + Area
+
+# Create a list of all linear models:
+LM_list <- list(Chl_Temp_LM, Chl_MLD_LM,
+                Chl_Temp_POC_LM, Chl_Temp_POC_Season_LM, 
+                Chl_Temp_POC_Season_Bloom_LM, 
+                Chl_Temp_POC_Bloom_Region_LM)
+
+
+
+# Mixed effects models:
+
+Chl_Temp_MEM = lmer(TEP ~ Temperature + Log_Chl + (1|Bloom), 
+                    data = global_data)  # Chl + Temp
+
+Chl_Temp_POC_MEM = lmer(TEP ~ Temperature + Log_Chl + POC + Area + (1|Bloom), 
+                     data = global_data)  # Chl + MLD + POC + Area
+
+Chl_Temp_POC_Season_MEM = lmer(TEP ~ Temperature + Log_Chl + POC + Summer + 
+                    (1|Bloom), data = global_data)  # Chl + MLD + POC + Season
+
+# Create a list of all mixed effects models:
+MEM_list <- list(Chl_Temp_MEM, Chl_Temp_POC_MEM, Chl_Temp_POC_Season_MEM)
+
+```
+
+
+
+# We now have a series of predictive models, but not all of them are likely 
+# appropriate (i.e. they do not satisfy linear modelling assumptions). Here, 
+# we will run a series of tests, and elimiate any model that does not satisfy 
+# the requirements.
+
+# Assumption of multi-collinearity:
+```{r}
+
+# Create a function to identify excess multi-collinearity (VIF test) for each 
+# model:
+
+
+VIF_fn <- function(model) {
+  
+  score <- car::vif(model)
+  score <- max(score)  # Any score >5 will be removed as unacceptable
+  
+  return(score)
+  
+}
+
+
+# Apply the function to identify multi-collinearity:
+lapply(LM_list, VIF_fn)
+lapply(MEM_list, VIF_fn)
+
+```
+
+
+
+# Assumption of normaily in residual distributions:
+```{r}
+
+# Create a function to identify non-normality in model residual distribution
+# (Shapiro-Wilks test) for each model:
+
+
+Norm_fn <- function(model) {
+  
+  norm <- shapiro.test(resid(model))  # scores < 0.05 will be removed
+  
+  return(norm)
+  
+}
+
+
+# Apply the function to identify multi-collinearity:
+lapply(LM_list, Norm_fn)
+lapply(MEM_list, Norm_fn)
+
+```
+
+
+
+
+
+
