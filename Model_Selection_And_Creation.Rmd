@@ -30,21 +30,16 @@ knitr::opts_chunk$set(echo = TRUE)
 suppressMessages(library(ggplot2))
 suppressMessages(library(caret))
 suppressMessages(library(ggpubr))
-suppressMessages(library(EnvStats))
-suppressMessages(library(jtools))
 suppressMessages(library(MuMIn))
 suppressMessages(library(lme4))
 suppressMessages(library(feather))
 suppressMessages(library(arrow))
 suppressMessages(library(dplyr))
 suppressMessages(library(viridis))
-suppressMessages(library(grid))
 suppressMessages(library(car))
 suppressMessages(library(GGally))
 suppressMessages(library(reshape2))
-suppressMessages(library(ggrepel))
-suppressMessages(library(mgcv))
-suppressMessages(library(visreg))
+suppressMessages(library(PKNCA))
 
 ```
 
@@ -106,11 +101,11 @@ Base_LM_list <- list(Chl_model, POC_model)
 Chl_Temp_LM = lm(TEP ~ Temperature + Log_Chl, 
                    data = global_data)  # Chl, Temp
 
-Chl_MLD_LM = lm(TEP ~ Temperature + Log_Chl + MLD, 
-                   data = regional_data)  # Chl, MLD
+Chl_Temp_POC_LM = lm(TEP ~ Temperature + Log_Chl + POC, 
+                  data = global_data) # Chl + Temp + POC
 
-Chl_Temp_POC_LM = lm(TEP ~ Temperature + Log_Chl + 
-                   POC, data = global_data) # Chl + Temp + POC
+Chl_Temp_POC_Bloom_LM = lm(TEP ~ Temperature + Log_Chl + POC + Bloom, 
+                   data = global_data)  # Chl, Temp, Bloom, POC
 
 Chl_Temp_POC_Season_LM = lm(TEP ~ Temperature + 
                    Log_Chl + POC + Season, 
@@ -126,11 +121,12 @@ Chl_Temp_POC_Bloom_Region_LM = lm(TEP ~ Temperature +
                                         # + Bloom + Area
 
 # Create a list of all linear models:
-LM_list <- list(Chl_Temp_LM, Chl_MLD_LM,
-                Chl_Temp_POC_LM, Chl_Temp_POC_Season_LM, 
+LM_list <- list(Chl_Temp_LM,
+                Chl_Temp_POC_LM, 
+                Chl_Temp_POC_Bloom_LM,
+                Chl_Temp_POC_Season_LM,
                 Chl_Temp_POC_Season_Bloom_LM, 
                 Chl_Temp_POC_Bloom_Region_LM)
-
 
 
 # Mixed effects models:
@@ -145,7 +141,9 @@ Chl_Temp_POC_Season_MEM = lmer(TEP ~ Temperature + Log_Chl + POC + Summer +
                     (1|Bloom), data = global_data)  # Chl + MLD + POC + Season
 
 # Create a list of all mixed effects models:
-MEM_list <- list(Chl_Temp_MEM, Chl_Temp_POC_MEM, Chl_Temp_POC_Season_MEM)
+MEM_list <- list(Chl_Temp_MEM, 
+                 Chl_Temp_POC_MEM, 
+                 Chl_Temp_POC_Season_MEM)
 
 ```
 
@@ -205,6 +203,23 @@ lapply(MEM_list, Norm_fn)
 
 
 
+# Now, we can drop any models that did not pass the above tests:
+```{r}
+
+# Create a new list with only the valid models
+Valid_models <- list(LM_list[[4]], LM_list[[6]],
+                     MEM_list[[1]], MEM_list[[2]])
+
+
+# Compare models with AIC selection criteria. Will output preffered model:
+AIC(Valid_models)
+AIC(LM_list[[4]], LM_list[[6]], MEM_list[[1]], MEM_list[[2]])
+
+
+# View a summary for the preferred model:
+summary(LM_list[[6]])
+
+```
 
 
 
