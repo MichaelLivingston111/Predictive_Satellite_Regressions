@@ -62,8 +62,10 @@ Read_fn <- function(file) {
     mutate(Bloom = if_else(Chl > 2.5, 1, 0))
   
   data <- data %>%  # Index out variables of interest
-    select(TEP, Temperature, Season, Log_Chl, POC, MLD, Summer, 
-           Winter, Bloom, Area)
+    select(TEP, Temperature, Season, Log_Chl, POC, Summer, 
+           Winter, Bloom, Arctic, Area)
+  
+  data <- na.omit(data)
   
 
   return(data)
@@ -116,7 +118,7 @@ Chl_Temp_POC_Season_Bloom_LM = lm(TEP ~ Temperature +
                    data = global_data)  # Chl + Temp + POC + Season + Bloom
 
 Chl_Temp_POC_Bloom_Region_LM = lm(TEP ~ Temperature + 
-                   Log_Chl + POC + Bloom + Area, 
+                   Log_Chl + POC + Bloom + Arctic, 
                    data = global_data)  # Chl + Temp + POC + 
                                         # + Bloom + Area
 
@@ -134,7 +136,7 @@ LM_list <- list(Chl_Temp_LM,
 Chl_Temp_MEM = lmer(TEP ~ Temperature + Log_Chl + (1|Bloom), 
                     data = global_data)  # Chl + Temp
 
-Chl_Temp_POC_MEM = lmer(TEP ~ Temperature + Log_Chl + POC + Area + (1|Bloom), 
+Chl_Temp_POC_MEM = lmer(TEP ~ Temperature + Log_Chl + POC + Arctic + (1|Bloom), 
                      data = global_data)  # Chl + MLD + POC + Area
 
 Chl_Temp_POC_Season_MEM = lmer(TEP ~ Temperature + Log_Chl + POC + Summer + 
@@ -220,6 +222,136 @@ AIC(LM_list[[4]], LM_list[[6]], MEM_list[[1]], MEM_list[[2]])
 summary(LM_list[[6]])
 
 ```
+
+# Build a funciton that creates a set of plots to visualize statistical 
+# assumptions for a given model:
+```{r}
+
+
+ModelVal <- function(model, data){
+  
+    # Get the model residuals and predictions:
+    resid <- resid(model)  # residuals
+    predicts <- predict(model)  # predictions
+    
+    
+
+    # Plot the distribution of the model residuals:
+    Histo <- ggplot(data, aes(resid)) + 
+      geom_histogram(binwidth = 0.5, colour = "black", fill = "white") +
+      xlab("Residuals") +
+      ylab("Count") +
+      theme_pubr()
+    
+    
+    # QQplots:
+    QQ <- ggplot(data, aes(sample = resid)) +
+      stat_qq() + stat_qq_line() +
+      xlab("Theoretical quantiles") +
+      ylab("Sample Quantiles") +
+      theme_pubr()
+    
+    
+    # Residual plot:
+    Res <- ggplot(data, aes(predicts, resid)) +
+        geom_point(alpha = 0.5)  +
+        geom_abline(slope = 0, intercept = 0, linetype = "dashed") +
+        theme_pubr()
+    
+    
+    # Scatter:
+    Val <- ggplot(global_data, aes(TEP, predicts)) +
+        geom_point(alpha = 0.5) +
+        geom_abline(slope = 1, intercept = 0, linetype = "dashed") +  #1:1 line
+        theme_pubr()
+    
+    
+    # Arrange plots:
+    plots <- ggarrange(QQ, Histo, Res, Val, ncol = 2, nrow = 2)
+    
+    return(plots)
+
+}
+
+
+ModelVal(LM_list[[6]], global_data)
+
+
+```
+
+
+# Perform cross validation techniques to assess the predictive accuracy of each 
+# suitable model on new data. A function below employs both "Leave one out 
+# cross validation" and "K-fold cross validation" techniques:
+```{r}
+
+# Define the cross validation functions:
+train.control.LOOCV <- trainControl(method = "LOOCV")
+train.control.KFOLD <- trainControl(method = "repeatedcv", 
+                                    number = 10, repeats = 10)
+  
+  
+
+# Train the selected model using train control functions above:
+preffered_model_LOOCV <- train(TEP ~ Log_Chl + Temperature + POC + Arctic + Bloom, 
+                         data = global_data, method = "lm",
+                         trControl = train.control.LOOCV)
+
+preffered_model_KFOLD <- train(TEP ~ Log_Chl + Temperature + POC + Arctic + Bloom, 
+                         data = global_data, method = "lm",
+                         trControl = train.control.KFOLD)
+  
+  
+
+# Create a function to calculate prediction accuracy for the above model:
+
+ModelCrossVal <- function(model, data){
+  
+  predictions <- predict(model)
+  
+  mae <- MAE(predictions, data$TEP)  # Mean absolute error
+  rmse <- RMSE(predictions, data$TEP)  # Root mean square error
+  rsq <- summary(model)$r.squared  # R squared
+  
+  acc <- c(mae, rmse, rsq)
+  
+  return(acc)
+
+  }
+
+
+
+# Create a function to plots cross validation results for the above model and 
+# cross validation techniques:
+
+CrossValPlot <- function(model, data){
+  
+  data$Predictions <- predict(model)
+  
+  crossvalplot <- ggplot(data, aes(TEP, Predictions, color = Area)) +
+    geom_point(alpha = 0.7) +
+    ylab("Predicted TEP") +
+    xlab("Measured TEP") +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+    scale_color_manual(values = c("blue", "black")) +
+    theme(legend.title = element_blank()) +
+    theme_bw()
+  
+  return(crossvalplot)
+}
+
+
+# Apply the functions to caluclate and visualize accuracy metrics:
+ModelCrossVal(preffered_model_KFOLD, global_data)
+CrossValPlot(preffered_model_KFOLD, global_data)
+
+```
+
+
+
+
+
+
 
 
 
