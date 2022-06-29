@@ -43,7 +43,7 @@ file_poc = "May_2021_8D_POC_4km.nc"  # May 1-9 2021
 # file = 'LB_Line_Sept_2019_DAY_POC_4km.nc'  # Summer LB line verification
 ds_poc = nc.Dataset(file_poc)
 
-# ######################################################################################################################
+# ----------------------------------------------------------------------------------------------------------------------
 # Define a function to clean and sort all the data before sending it to R. Returns a dataframe of all predictors
 # variables indexed to lat/lon, and a R input file.
 
