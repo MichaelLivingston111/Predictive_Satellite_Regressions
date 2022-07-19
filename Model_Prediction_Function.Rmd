@@ -55,11 +55,13 @@ Predict_fn_regional <- function(df) {
   
   # Select the relevant data for the model:
   regional_data <- total_data %>% select(TEP, Log_Chl, Temperature, 
-                                         Season, POC)
+                                         Season, POC, Chl)
+  
+  regional_data <- regional_data %>% 
+    mutate(Bloom = if_else(Chl > 2.5, 1, 0))  # Add bloom term
   
   # Create the model:
-  regional_model <- lm(TEP ~ Log_Chl + Temperature + POC + Season, 
-                       data = regional_data) 
+  regional_model <- Applied_model  # Model created in previous file 
   
   # Predictions:
   regional_predictions <- predict(regional_model, df, 
@@ -83,14 +85,8 @@ Predict_fn_regional <- function(df) {
 ```{r}
 Predict_fn_global <- function(df) {
   
-  # Select the relevant data for the model:
-  global_data <- global_data %>% select(TEP, Season, Log_Chl, POC, Summer, 
-                                        Arctic, Area, Temperature)
-  global_data <- na.omit(global_data)
-  
   # Create the model:
-  global_model <- lm(TEP ~ Log_Chl + POC + Temperature + Arctic, 
-                     data = global_data)
+  global_model <- Applied_model  # Model created in previous file
   
   # Predictions:
   global_predictions <- predict(global_model, df, 
@@ -112,7 +108,7 @@ Predict_fn_global <- function(df) {
 
 # Upload all the satellite data from 2021 to be used as predictors:
 
-# 8 day average spring 2021 regional:
+# 8 day average spring 2021 regional: 
 df_Spring_8D_2021 <- arrow::read_feather('May_2021_LineP.feather')
 
 # 8 day average summer 2021 regional:
@@ -157,7 +153,7 @@ df_Summer_8D_2021 <- arrow::read_feather('Aug_2021_LineP.feather')
 predictors <- vector(mode = "list", length = 2)
 names(predictors) <- c("Spring_2021", "Summer_2021")
 
-predictors[[1]] <- df_Summer_8D_2021; predictors[[2]] <- df_Summer_8D_2021
+predictors[[1]] <- df_Summer_8D_2021; predictors[[2]] <- df_Spring_8D_2021
 
 
 
