@@ -9,7 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 # Context: Marine exopolymeric substances have significant importance due to 
-# their role in marine carbon dioxide sequestration (as particulate organic 
+# their role in marine carbon dioxide sequestration (as particulate
 # carbon). This substances play a critical role in the efficiency of carbon 
 # sequestration in our oceans, however, no large scale estimations currently 
 # exist for these substances. Therefore, this project seeks to create reliable 
@@ -20,8 +20,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 
-# This file contains the base code for selecting the optimal model based on a 
-# series of available predictor variables and measured datasets.
+# This file contains the base code for selecting the optimal model(s) based on a 
+# series of available predictor variables and measured data sets.
 
 
 # Upload required libraries:
