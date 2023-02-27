@@ -21,7 +21,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 # This file contains the base code for selecting the optimal model based on a 
-# series of available predictor variables and measured data sets.
+# series of available predictor variables and measured data sets. . 
 
 
 # Upload required libraries:

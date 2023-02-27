@@ -19,8 +19,6 @@ knitr::opts_chunk$set(echo = TRUE)
 # Models and predictions are build and made in R, respectively. Python is used
 # to clean and visualize the data.
 
-# Testing push.
-
 # Load required libraries:
 ```{r}
 

@@ -7,7 +7,7 @@ This project creates a series of predictive models to estimate the concentration
 
 Overall, the models are quite accurate when tested on validation data from marine surfaces with an accuracy of >81% and mean error of ~10 micrograms. The models do not appear to be overfit, or violate any necessary assumptions.
 
-This project is a completely novel approach to estimating concentrations of marine exopolymers. Large scale estimations have never been done before. Furthermore, this represents a valuable tool for desalination industries as marine exopolymer gels are a serious issue in the desalination industry.  
+This project is a completely novel approach to estimating concentrations of marine exopolymers. Large scale estimations have never been done before. Furthermore, this represents a valuable tool for desalination industries as marine exopolymer gels are a serious issue in the desalination industry .
 
 
 ![Figure_X2](https://user-images.githubusercontent.com/62566424/176569971-3ccbc1ba-7f94-432a-83ca-ac45763aa28a.png)
